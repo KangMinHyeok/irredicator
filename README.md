@@ -36,12 +36,12 @@ The scripts of IRRedicator can be categorized as follows: obtaining datasets, pr
 │   ├── spark_analyze_irr_age.py # analyze the age of IRR objects
 │   └── spark_analyze_overlapping_objects.py # analyze the number of overlapping objects between IRR and RPKI
 
-├── caida
+├── as_info
 │   ├── as2isp.py # get a organization of an AS 
 │   └── as2isp.py # get a relationship between two ASes
 
 ├── dataset
-│   ├── get_caida.py # download caida datasets
+│   ├── get_as_info.py # download as_info datasets
 │   ├── get_irr.py # download IRR datasets
 │   ├── get_nrostats.py # download NRO statistics datasets
 │   ├── get_radb.py # download the RADb dataset from the archive of RADb
