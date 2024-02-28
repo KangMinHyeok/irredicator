@@ -29,12 +29,12 @@ The scripts of IRRedicator can be categorized as follows: obtaining datasets, pr
 ├── analysis
 │   ├── spark_analyze_active_cdf.py # analyze cdf of active IRR records
 │   ├── spark_analyze_as_coverage.py # analyze the AS coverage of IRR and RPKI 
-│   ├── spark_analyze_.py # analyze the BGP coverage of IRR and RPKI 
-│   ├── spark_analyze_.py # analyze the BGP coverage of inconsistent prefixes
-│   ├── spark_analyze_.py # analyze the percentage/# of inconsistent prefixes
-│   ├── spark_analyze_.py # analyze the IP coverage of IRR and RPKI
-│   ├── spark_analyze_.py # analyze the age of IRR objects
-│   └── spark_analyze_.py # analyze the number of overlapping objects between IRR and RPKI
+│   ├── spark_analyze_bgp_coverage.py # analyze the BGP coverage of IRR and RPKI 
+│   ├── spark_analyze_inconsistent_bgp_coverage.py # analyze the BGP coverage of inconsistent prefixes
+│   ├── spark_analyze_inconsistent_objects.py # analyze the percentage/# of inconsistent prefixes
+│   ├── spark_analyze_ip_coverage.py # analyze the IP coverage of IRR and RPKI
+│   ├── spark_analyze_irr_age.py # analyze the age of IRR objects
+│   └── spark_analyze_overlapping_objects.py # analyze the number of overlapping objects between IRR and RPKI
 
 ├── caida
 │   ├── as2isp.py # get a organization of an AS 
