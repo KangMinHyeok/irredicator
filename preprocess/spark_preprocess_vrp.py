@@ -196,9 +196,9 @@ def preprocessZiggyVRP(ziggyPath, nroPath, asISPPath, savePath, localPath):
 		
 		sc.stop()
 
-if __name__ == '__main__':
+def main():
 	parser = argparse.ArgumentParser(description='preprocess vrp\n')
-	parser.add_argument('--asISPPath', default='/home/mhkang/caida/as-org/data/')
+	parser.add_argument('--asISPPath', default='/home/mhkang/caida/as-isp/data/')
 	parser.add_argument('--nroPath', type=str, default='/user/mhkang/nrostats/ipv4-w-date/')
 	parser.add_argument('--ziggyPath', type=str, default='/user/mhkang/vrps/ziggy-vrps/')
 
@@ -208,5 +208,11 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	
 	preprocessZiggyVRP(args.ziggyPath, args.nroPath, args.asISPPath, args.savePath, args.localPath)
+
+
+
+if __name__ == '__main__':
+	main()
+
 
 

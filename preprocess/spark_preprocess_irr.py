@@ -215,6 +215,9 @@ def preprocessingIRRs(irrPath, nrov4Path, nrov6Path, asISPPath, savePath, localP
 	# try: hdfs.put(irrLocalPath + "*.csv", )
 	# except: pass	
 	irrFiles = hdfs.ls(irrPath)
+
+	irrFiles = list(filter(lambda x: x.endswith('db') or x.endswith('db.gz') or x.endswith('route.gz'), irrFiles))
+	
 	nroFiles = hdfs.ls(nrov4Path)
 	nroFiles += hdfs.ls(nrov6Path)
 	
@@ -222,6 +225,7 @@ def preprocessingIRRs(irrPath, nrov4Path, nrov6Path, asISPPath, savePath, localP
 	newdates = get_dates(irrFiles)
 	
 	targetdates = sorted(list(set(newdates) - set(currdates)))
+	targetdates = ['20230520']
 	nrodates = get_dates(nroFiles)
 	if len(targetdates) == 0: 
 		print("up to date")
@@ -253,9 +257,11 @@ def preprocessingIRRs(irrPath, nrov4Path, nrov6Path, asISPPath, savePath, localP
 		
 		sc.setLogLevel("WARN")
 
+		sc.addPyFile("/home/mhkang/irredicator/utils.zip")
+
 		for i, date in enumerate(targetdates):
 			
-			currIrrFiles = list(filter(lambda x: get_date(x) == date, irrFiles))
+			currIrrFiles = list(filter(lambda x: get_date(x).split('_')[0] == date, irrFiles))
 			nrodate = date
 			currNroFile = list(filter(lambda x: get_date(x) == date, nroFiles))
 
@@ -303,7 +309,7 @@ def preprocessingIRRs(irrPath, nrov4Path, nrov6Path, asISPPath, savePath, localP
 	
 def preprocessIRRs():
 	parser = argparse.ArgumentParser(description='preprocess irrs\n')
-	parser.add_argument('--asISPPath', default='/home/mhkang/caida/as-org/data/')
+	parser.add_argument('--asISPPath', default='/home/mhkang/caida/as-isp/data/')
 	parser.add_argument('--nrov4Path', type=str, default='/user/mhkang/nrostats/ipv4-w-date/')
 	parser.add_argument('--nrov6Path', type=str, default='/user/mhkang/nrostats/ipv6-w-date/')
 	parser.add_argument('--irrPath', type=str, default='/user/mhkang/irrs/rawdata/')
@@ -312,8 +318,8 @@ def preprocessIRRs():
 	parser.add_argument('--savePath', type=str, default='/user/mhkang/irrs/daily-tsv-w-changed/raw/')
 	parser.add_argument('--localPath', type=str, default='/net/data/irrs/daily-tsv-w-changed/')
 
-	parser.add_argument('--savePath2', type=str, default='/user/mhkang/radb/daily-tsv-w-changed/raw/')
-	parser.add_argument('--localPath2', type=str, default='/net/data/radb/daily-tsv-w-changed/')
+	# parser.add_argument('--savePath2', type=str, default='/user/mhkang/radb/daily-tsv-w-changed/raw/')
+	# parser.add_argument('--localPath2', type=str, default='/net/data/radb/daily-tsv-w-changed/')
 	
 	
 	args = parser.parse_args()
@@ -323,4 +329,5 @@ def preprocessIRRs():
 if __name__ == '__main__':
 
 	preprocessIRRs()
+
 
