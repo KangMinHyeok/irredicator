@@ -229,7 +229,7 @@ class Dataset:
                     label = 1 if validation == 'valid' else 0
                     features = list(map(float, tokens[9:]))
                     features = self.trim_features(features)
-                    row = feature + [label, record_type, idx]
+                    row = features + [label, record_type, idx]
                     if label_flipping:
                         row += [key, validation]
 
