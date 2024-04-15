@@ -51,8 +51,7 @@ def evaluate(train_dirs, outdir, params=None
         'n_iter':n_iter
     }
     
-    dataset.load_dataset(label_flipping=True)
-    exit()
+    dataset.load_dataset(label_flipping=False)
     X, Y = dataset.get_rpki_covered(split=True, num_chunks=5)
 
     if params is None:
