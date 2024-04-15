@@ -63,8 +63,6 @@ def get_roa(start_date, end_date, roa_dir, vrp_dir):
         
         print("Got {}\n".format(filename))
 
-    os.system('hdfs dfs -put {}*.csv {}'.format(vrp_dir, vrp_dir.replace('/net/data', '/user/mhkang')))
-
 def main():
     parser = argparse.ArgumentParser(description='get vrp\n')
     parser.add_argument('--start_date', type=str, default='20230331')

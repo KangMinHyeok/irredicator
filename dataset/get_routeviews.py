@@ -89,9 +89,10 @@ def main():
             dates = os.listdir(local_dir + '/bgpdata/' + month + '/UPDATES/')
             if len(dates) > 0:
                 dates = list(filter(lambda x: x.endswith('2300.bz2'), dates ))
-                dates = sorted(list(set(map(lambda x: x.split('.')[1], dates))))
-                latest_date = dates[-1]
-                break
+                if len(dates) > 0:
+                    dates = sorted(list(set(map(lambda x: x.split('.')[1], dates))))
+                    latest_date = dates[-1]
+                    break
     if latest_date is None:
         today = date.today()
         latest_date = today.strftime("%Y%m%d")
