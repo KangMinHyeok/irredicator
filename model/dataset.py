@@ -243,21 +243,13 @@ class Dataset:
             'sumRel', 'validation', 'source', 'record_type'
         ]
 
-        if label_flipping:
-            columns += ['key', 'validation']
-            record_columns += ['key']
         data = pd.DataFrame(data, columns=columns)
         data = data.set_index(['idx'])
         data = data.sample(frac=1)
-        
-        
 
         records = pd.DataFrame(records, columns=record_columns)
         records = records.set_index(['idx'])
         self.data = data
         self.records = records
-
-        if label_flipping:
-            self.augment_dataset(bitvector_file, columns)
 
         return data, records

@@ -65,7 +65,16 @@ def evaluate(train_dirs, outdir, params=None
     X_train, Y_train = train
     X_test, Y_test = test
     Y_pred = model.predict(X_test)
-    
+
+    data, record = dataset.load_dataset(label_flipping=False)
+    aggr_pred = Y_pred.join(record, how='left')
+    print(aggr_pred)
+    # record = [idx, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source]
+
+    for record in aggr_pred.values.tolist():
+        date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, socre0, score1 = record
+
+
     save_score(score_file, Y_test, Y_pred)
 
     X_all, Y_all = dataset.get_data()
@@ -80,24 +89,22 @@ def evaluate(train_dirs, outdir, params=None
 
     return params
 
-def evaluate_rpki_performance(outdir, train_dirs, save_model):
+def evaluate_rpki_performance_aggr(outdir, train_dirs, save_model):
     os.makedirs(outdir, exist_ok=True)
 
     params = None
-    for i in range(10):
-        params = evaluate(train_dirs, outdir
-            , params=params, suffix='_{}'.format(i)
-            , save_model=save_model, model_file=outdir + 'model_{}.pkl'.format(i))
+    params = evaluate(train_dirs, outdir
+        , params=params, save_model=save_model, model_file=outdir + 'model.pkl')
 
 def main():
     parser = argparse.ArgumentParser(description='get vrp\n')
-    parser.add_argument('--outdir', type=str, default='/home/mhkang/rpki-irr/outputs/evaluation/rpki_performance/')
+    parser.add_argument('--outdir', type=str, default='/home/mhkang/rpki-irr/outputs/evaluation/rpki_performance_aggr/')
     parser.add_argument('--train_dirs', nargs='+', type=str, default=['/home/mhkang/irrs/bgp-features-final/', '/home/mhkang/radb/bgp-features-final/'])
     parser.add_argument('--save_model', default=True)
 
     args = parser.parse_args()
 
-    evaluate_rpki_performance(args.outdir, args.train_dirs, args.save_model)
+    evaluate_rpki_performance_aggr(args.outdir, args.train_dirs, args.save_model)
 
 if __name__ == '__main__':
     random.seed(seed_value)
