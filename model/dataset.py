@@ -48,7 +48,7 @@ class Dataset:
         return infiles
     
 
-    def feature_names(self):
+    def get_feature_names(self):
         if self.feature_names is not None:
             return self.feature_names
 
@@ -236,7 +236,7 @@ class Dataset:
                     data.append(row)
         
 
-        columns = self.feature_names() + ['label', 'record_type', 'idx']
+        columns = self.get_feature_names() + ['label', 'record_type', 'idx']
         record_columns = [
             'idx', 'date', 'rir', 
             'prefix_addr', 'prefix_len', 'origin', 'isp', 
