@@ -206,6 +206,8 @@ class Dataset:
                     date, prefix_addr, prefix_len, origin, isp, rir, validation, sumRel, source = tokens[:9]
                     # prefix = "{}/{}".format(prefix_addr, prefix_len)
                     prefix_len = int(prefix_len)
+                    if '#' in origin:
+                        origin = origin.split('#')[0]
                     orgin = int(origin)
                     inactive = len(tokens) == 9
                     excluded = validation == 'invalid' and sumRel != 'none'
