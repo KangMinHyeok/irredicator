@@ -22,6 +22,7 @@ from utils.utils import *
 from utils.score import *
 from model.dataset import Dataset
 from model.model import Model
+from model.loss import softmax
 
 seed_value = 940124
     
@@ -76,10 +77,47 @@ def evaluate(train_dirs, outdir, params=None
     data, record = dataset.load_dataset(label_flipping=False)
     aggr_pred = dpreds.join(record, how='left')
     print(aggr_pred)
-
+    aggregated_scores = {}
     for record in aggr_pred.values.tolist():
-         socre0, score1, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, record_type = record
+        score0, score1, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, record_type = record
+        key = (prefix_addr, prefix_len)
+        if key not in aggregated_scores:
+            aggregated_scores[key] = {}
+            aggregated_scores[key]['origin'] = []
+            aggregated_scores[key]['score0'] = []
+            aggregated_scores[key]['score1'] = []
+            aggregated_scores[key]['record'] = {}
 
+        if origin not in aggregated_scores[key]['origin']:
+            aggregated_scores[key]['origin'].append(origin)
+            aggregated_scores[key]['score0'].append(score0)
+            aggregated_scores[key]['score1'].append(score1)
+            aggregated_scores[key]['record'][origin] = []
+            aggregated_scores[key]['record'][origin].append(record)
+
+        if origin in aggregated_scores[key]['origin']:
+            aggregated_scores[key]['record'][origin].append(record)
+
+    single = 0
+    multiple = 0
+    with open('score.txt', 'w') as fout:
+        for key, per_prefix_dict in aggregated_scores.items():
+            if len(per_prefix_dict['score0']) == 1:
+                single += 1
+                continue
+            multiple += 1
+            validations = list(map(lambda x: x[0][-3], per_prefix_dict['record'].values()))
+            original = list(map(lambda x: x[1], softmax(list(zip(per_prefix_dict['score0'],per_prefix_dict['score1'])))))
+            fout.write('{}\n{}\n{}\n{}\n\n'.format(
+                ','.join(list(map(str, per_prefix_dict['score1']))),
+                ','.join(list(map(str, original))), 
+                ','.join(list(map(str, softmax(per_prefix_dict['score1'])))),
+                ','.join(validations)
+            ))
+    
+    print('total: {}'.format(single + multiple))
+    print('single: {}'.format(single))
+    print('multiple: {}'.format(multiple))
 
     records = dataset.get_records()
     records = records.join(dpreds, how='left')

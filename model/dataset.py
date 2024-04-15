@@ -197,11 +197,11 @@ class Dataset:
         idx = 0
 
         for infile in self.infiles:
-            if len(data) == 5000: break
+            # if len(data) == 5000: break
             with open(infile, 'r') as fin:
                 for line in fin:
                     idx += 1
-                    if len(data) == 5000: break
+                    # if len(data) == 5000: break
                     tokens = line.replace('\n', '').split('\t')
                     date, prefix_addr, prefix_len, origin, isp, rir, validation, sumRel, source = tokens[:9]
                     # prefix = "{}/{}".format(prefix_addr, prefix_len)
