@@ -43,7 +43,7 @@ class Dataset:
         else:
             print('Invalid indir type: must be str of list of str but the type is {}'.format(type(indir)))
 
-        infiles = list(filter(lambda x: x.endswith('.tsv') and dateDiff(getDate(x), target_date) == 0, infiles ))
+        infiles = list(filter(lambda x: x.endswith('.tsv') and date_diff(get_date(x), target_date) == 0, infiles ))
 
         return infiles
     

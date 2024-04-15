@@ -16,7 +16,8 @@ import time as tm
 from sklearn.model_selection import train_test_split
 from bayes_opt import BayesianOptimization
 
-sys.path.append('/home/mhkang/irredicator')
+sys.path.append('/home/mhkang/rpki-irr/irredicator')
+
 from utils.utils import *
 from utils.score import *
 from model.dataset import Dataset
@@ -80,17 +81,24 @@ def evaluate(train_dirs, outdir, params=None
 
     return params
 
-def main():
-    outdir = '/home/mhkang/evaluation/rpki_performance/'
+def evaluate_rpki_performance(outdir, train_dirs, save_model):
     os.makedirs(outdir, exist_ok=True)
 
-    train_dirs = ['/home/mhkang/irrs/bgp-features-final/', '/home/mhkang/radb/bgp-features-final/']
-    save_model = True
     params = None
     for i in range(10):
         params = evaluate(train_dirs, outdir
             , params=params, suffix='_{}'.format(i)
             , save_model=save_model, model_file=outdir + 'model_{}.pkl'.format(i))
+
+def main():
+    parser = argparse.ArgumentParser(description='get vrp\n')
+    parser.add_argument('--outdir', type=str, default='/home/mhkang/rpki-irr/outputs/evaluation/rpki_performance/')
+    parser.add_argument('--train_dirs', nargs='+', type=str, default=['/home/mhkang/irrs/bgp-features-final/', '/home/mhkang/radb/bgp-features-final/'])
+    parser.add_argument('--save_model', default=True)
+
+    args = parser.parse_args()
+
+    evaluate_rpki_performance(args.outdir, args.train_dirs, args.save_model)
 
 if __name__ == '__main__':
     random.seed(seed_value)
