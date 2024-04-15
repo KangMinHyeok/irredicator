@@ -78,7 +78,7 @@ def evaluate(train_dirs, outdir, params=None
     print(aggr_pred)
 
     for record in aggr_pred.values.tolist():
-        date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, socre0, score1 = record
+         socre0, score1, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, record_type = record
 
 
     records = dataset.get_records()
