@@ -66,21 +66,20 @@ def evaluate(train_dirs, outdir, params=None
     X_test, Y_test = test
     Y_pred = model.predict(X_test)
 
-    data, record = dataset.load_dataset(label_flipping=False)
-    aggr_pred = Y_pred.join(record, how='left')
-    print(aggr_pred)
-    # record = [idx, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source]
-
-    for record in aggr_pred.values.tolist():
-        date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, socre0, score1 = record
-
-
     save_score(score_file, Y_test, Y_pred)
 
     X_all, Y_all = dataset.get_data()
     index = X_all.index.values.tolist()
     Y_pred_all = model.predict(X_all)
     dpreds = pd.DataFrame(Y_pred_all, columns=['score0', 'score1'], index=index)
+
+    data, record = dataset.load_dataset(label_flipping=False)
+    aggr_pred = dpreds.join(record, how='left')
+    print(aggr_pred)
+
+    for record in aggr_pred.values.tolist():
+        date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, socre0, score1 = record
+
 
     records = dataset.get_records()
     records = records.join(dpreds, how='left')
