@@ -14,9 +14,13 @@ class AS2Rel:
             self.dates = []
             self.db   = None
 
-            self.loadDate()
-            if not self.hasDB(): self.saveDB()
-            self.loadDB()
+            if not self.hasDB(): 
+                self.saveDB()
+            else:
+                self.loadDate()
+                self.loadDB()
+                if max(self.dates) not in self.db:
+                    self.saveDB()
             
             self.ddos_protection = [    20940, 16625, 32787,        # akamai
                                         209, 3561,                  # CenturyLink
@@ -105,15 +109,16 @@ class AS2Rel:
         return (int(asn) in self.ddos_protection)
 
     def saveDB(self):
-        db = {}
-        db_rel = set() 
+        self.db = {}
+        # db_rel = set() 
 
         for fname in os.listdir(self.path):
             if not fname.endswith("as-rel.txt"): continue
             date = fname.split(".")[0]
+            self.dates.append(date)
 
-            if date not in db:
-                db[date] = {}
+            if date not in self.db:
+                self.db[date] = {}
 
             for line in open(os.path.join(self.path, fname)):
                 if("#" in line):
@@ -123,15 +128,15 @@ class AS2Rel:
 
                 if (rel == "-1"): #provider, customer
 
-                    db[date][ as1 + "+" + as2 ] = "provider"  # as1 is the provider
-                    db[date][ as2 + "+" + as1 ] = "customer" # as2 is the customer
+                    self.db[date][ as1 + "+" + as2 ] = "provider"  # as1 is the provider
+                    self.db[date][ as2 + "+" + as1 ] = "customer" # as2 is the customer
 
                 else: # peer
-                    db[date][ as1 + "+" + as2 ] = "peer"  
-                    db[date][ as2 + "+" + as1 ] = "peer" 
+                    self.db[date][ as1 + "+" + as2 ] = "peer"  
+                    self.db[date][ as2 + "+" + as1 ] = "peer" 
                 
-                db_rel.add(as1 + "+" + as2)
-                db_rel.add(as2 + "+" + as1)
+                # db_rel.add(as1 + "+" + as2)
+                # db_rel.add(as2 + "+" + as1)
         
-        json.dump( db, open(self.export_path, "w"), indent = 4)
+        json.dump( self.db, open(self.export_path, "w"), indent = 4)
 
