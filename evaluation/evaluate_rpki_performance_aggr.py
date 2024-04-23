@@ -148,3 +148,8 @@ if __name__ == '__main__':
     np.random.seed(seed_value)
     main()
 
+# prefixes
+# [1102770 rows x 12 columns]
+# total: 929047
+# single: 879640
+# multiple: 49407

@@ -1,13 +1,14 @@
 # m h  dom mon dow   command
 # daily
 # get datasets
-0 0 * * * /home/mhkang/rpki-irr/irredicator/crontab/nrostats.sh
-0 1 * * * /home/mhkang/rpki-irr/irredicator/crontab/irr.sh
-0 2 * * * /home/mhkang/rpki-irr/irredicator/crontab/roa.sh
-0 3 * * * /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
+0 2 * * * /home/mhkang/rpki-irr/irredicator/crontab/nrostats.sh
+0 4 * * * /home/mhkang/rpki-irr/irredicator/crontab/irr.sh
+0 8 * * * /home/mhkang/rpki-irr/irredicator/crontab/roa.sh
+0 22 * * * /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
 
 0 1 * * * python3.8 /home/mhkang/rpki-irr/irredicator/dataset/get_routeviews.py >> /home/mhkang/rpki-irr/logs/get_routeviews.log 2>&1
 0 3 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --rel >> /home/mhkang/rpki-irr/logs/get_as_info_rel.log 2>&1
 0 4 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --isp >> /home/mhkang/rpki-irr/logs/get_as_info_isp.log 2>&1
 # put datasets to hdfs
 0 17 * * * python3 /home/mhkang/rpki-irr/src/dataset/put-bgp-update.py --localPath /net/data/rpki/raw-datasets/routeviews/bgpdump-parsed-reduced/ --savePath /user/mhkang/bgp/routeview/update/ >> /home/mhkang/rpki-irr/logs/put-routeview-update.log 2>&1
+0 0 * * 0 python3.8 /home/mhkang/rpki-irr/irredicator/analysis/merge_output.py >> /home/mhkang/rpki-irr/logs/merge_output.log 2>&1

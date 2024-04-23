@@ -198,8 +198,8 @@ if __name__ == '__main__':
     parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
     parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/irrs/daily-tsv/'])
     
-    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/')
-    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/')
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/as-coverage/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/as-coverage/')
 
 
     args = parser.parse_args()
