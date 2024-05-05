@@ -149,7 +149,7 @@ def count_inconsistent_prefix(row, vrp_dict):
     vrp_records = get_records(tree, record_set, binary_prefix)
 
     results = []
-    if len(vrp_records) != 0 and len(irr_origins) != 0:
+    if len(vrp_records) != 0 and len(irr_records) != 0:
         vrp_origins = set(map(lambda x: x[1], vrp_records))
         irr_origins = set(map(lambda x: x[0], irr_records))
         

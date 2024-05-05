@@ -131,7 +131,7 @@ def get_entries(date, binary_prefix, vrp_dict, irr_dict):
     vrp_origins = set()
 
     for prefix_addr, prefix_len, max_len, origin, source in vrp_records:
-        if int(prefix_len) <= int(bgp_length)
+        if int(prefix_len) <= int(bgp_length):
             vrp_origins.add( (origin, source, max_len) )
     
     irr_origins = set()
