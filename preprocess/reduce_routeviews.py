@@ -1,29 +1,16 @@
 import os
 import sys
 import bz2
-import copy
 import json
-import pickle
-import shutil
-import codecs
 import argparse
-import itertools
 import pandas
-import threading
 
 import time as t
 from tqdm import tqdm
 from datetime import *
 from datetime import timedelta
-# from datetime import date, timedelta
 from mrtparse import *
-from operator import add
-from operator import itemgetter
-from pyspark.sql import SQLContext, SparkSession, Row
-from pyspark import SparkContext, StorageLevel, SparkConf, broadcast
-from multiprocessing import Process, Pool
-import subprocess
-import pydoop.hdfs as hdfs
+from multiprocessing import Pool
 
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
@@ -102,10 +89,8 @@ def parseBGPUpdate(bgp_path, local_path):
             for source in sources:
                 vpName = source
 
-                curr_hdfs_path = "{}/{}".format(hdfs_path, source)
                 curr_local_path = "{}/{}".format(local_path, source)
                 os.makedirs(curr_local_path, exist_ok=True)
-                make_dirs(curr_hdfs_path, curr_local_path)
 
                 if source == "bgpdata":
                     source_path = "{}/{}".format(bgp_path, source)
