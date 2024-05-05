@@ -169,7 +169,8 @@ def getRelFunc(row, rel_dict, vrp_dict):
     key, values = row
     date, source, prefix_addr, prefix_len = key
 
-    tree, record_set = vrp_dict.value
+    vrp_dict = vrp_dict.value
+    tree, record_set = vrp_dict.get(date, ({}, {}))
     
     binary_prefix = ip2binary(prefix_addr, prefix_len)      
 
