@@ -77,7 +77,10 @@ def parseBGPUpdate(bgp_path, local_path):
     
     sources = os.listdir(bgp_path)
     
-    targetdates = pandas.date_range(start, end-timedelta(days=1),freq='d')
+    start_date = datetime.strptime(start, '%Y%m%d')
+    end_date = datetime.strptime(end, '%Y%m%d')
+
+    targetdates = pandas.date_range(start_date, end_date-timedelta(days=1),freq='d')
     targetdates = list(map(lambda x: x.strftime('%Y%m%d'), targetdates))
 
     print(targetdates)
