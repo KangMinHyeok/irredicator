@@ -16,8 +16,7 @@ from multiprocessing import Process
 import subprocess
 import pydoop.hdfs as hdfs
 
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
 from as_info.as2isp import AS2ISP
 from utils.utils import write_result, append2dict, get_files, get_dates, get_date, make_dirs
 
@@ -49,7 +48,6 @@ def make_binary_prefix_tree(records):
         binary_prefix = ip2binary(prefix_addr, prefix_len)
 
         insert(tree, record_set, binary_prefix, record)
-        
         
     return tree, record_set
 
@@ -194,7 +192,7 @@ def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
     currdates = get_dates(os.listdir(local_path))
     newdates = get_dates(bgpFiles)
     targetDates = sorted(list(set(newdates) - set(currdates)))
-    # targetDates = ['20170930']
+    
     if len(targetDates) == 0:
         print("no bgp file")
         exit()
