@@ -213,6 +213,17 @@ def analyze_inconsistent_prefix(irr_dir, roa_dir, hdfs_dir, local_dir):
     print(batches)
     for batch in batches:
         curr_start, curr_end = batch[0], batch[-1]
+        
+        curr_roa_files = list(filter(lambda x: curr_start <= get_date(x) <= curr_end, roa_files))
+        curr_irr_files = list(filter(lambda x: curr_start <= get_date(x) <= curr_end, irr_files))
+        
+        if len(curr_roa_files) <= 0:
+            print("len(curr_roa_files) <= 0")
+            continue
+        if len(curr_irr_files) <= 0:
+            print("len(curr_irr_files) <= 0")
+            continue
+
         conf = SparkConf(
                 ).setAppName(
                     "inconsistent object: {}-{}".format(curr_start, curr_end)
@@ -227,17 +238,7 @@ def analyze_inconsistent_prefix(irr_dir, roa_dir, hdfs_dir, local_dir):
         spark = SparkSession(sc)
 
         sc.setLogLevel("WARN")
-
-        curr_roa_files = list(filter(lambda x: curr_start <= get_date(x) <= curr_end, roa_files))
-        curr_irr_files = list(filter(lambda x: curr_start <= get_date(x) <= curr_end, irr_files))
         
-        if len(curr_roa_files) <= 0:
-            print("len(curr_roa_files) <= 0")
-            continue
-        if len(curr_irr_files) <= 0:
-            print("len(curr_irr_files) <= 0")
-            continue
-
         roa_dict = {}
         if len(curr_roa_files) > 0:
             roa_dict = sc.textFile(','.join(curr_roa_files))\

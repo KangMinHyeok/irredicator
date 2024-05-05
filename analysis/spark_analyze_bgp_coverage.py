@@ -20,7 +20,7 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs
+from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs, readNcollectAsMap
 from utils.binaryPrefixTree import make_binary_prefix_tree, get_records
 
 def origin2int(origin):
@@ -294,9 +294,9 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
         target_irr_files = sorted(list(filter(lambda x: get_date(x) in batch, irr_files)))
         target_bgp_files = sorted(list(filter(lambda x: get_date(x) in batch, bgp_files)))
 
-        irr_dict = build_dict(target_irr_files, parseIRR)
+        irr_dict = readNcollectAsMap(sc, target_irr_files, parseIRR, make_binary_prefix_tree)
 
-        roa_dict = build_dict(target_roa_files, parseVRP)
+        roa_dict = readNcollectAsMap(sc, target_roa_files, parseVRP, make_binary_prefix_tree)
         
         BGPRecords  = sc.textFile(','.join(target_bgp_files))\
                         .flatMap(lambda line: parseBGP(line))\

@@ -21,7 +21,7 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, ip2binary, get_date, get_files, make_dirs, readNcollectAsMap
+from utils.utils import write_result, ip2binary, get_date, get_dates, get_files, make_dirs, readNcollectAsMap
 
 def ip2binary(prefix_addr, prefix_len):
     if("." in prefix_addr): # IPv4
@@ -324,7 +324,7 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
     roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
     
-    target_dates = sorted(list(set(getDates(bgpFiles) + getDates(roaFiles) + getDates(irrFiles))))
+    target_dates = sorted(list(set(get_dates(bgpFiles) + get_dates(roaFiles) + get_dates(irrFiles))))
 
     bgpResults = None
     entryResults = None
