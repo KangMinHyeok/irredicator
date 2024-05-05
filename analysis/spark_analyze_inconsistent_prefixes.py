@@ -207,9 +207,9 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
                         .flatMap(parseIRR)\
                         .groupByKey()
         
-        results = irr_records.flatMap(lambda row: getRelFunc(row, rel_dict, roa_dict))
+        results = irr_records.flatMap(lambda row: getRelFunc(row, rel_dict, roa_dict))\
                         .reduceByKey(addCount)\
-                        .map(lambda row: (row[0][0], (row[0][1], row[0][2], row[1]) ) ) \
+                        .map(lambda row: (row[0][0], (row[0][1], row[0][2], row[1]) ) )\
                         .groupByKey()\
                         .flatMap(toCSV)
     
@@ -219,6 +219,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
         write_result(results, savePath + filename, localPath + filename, extension='.csv')
 
         sc.stop()
+        break
     
 
 def main():
