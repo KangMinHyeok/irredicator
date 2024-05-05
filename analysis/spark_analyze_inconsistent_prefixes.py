@@ -158,7 +158,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
     print("target dates: {} ~ {}".format(start, end))
     target_dates = sorted(list(filter(lambda x: start <= x <= end, list(set(irr_dates).union(set(roa_dates))))))
 
-    asRel = as2rel.AS2Rel(path=as_rel_dir)
+    as_rel = AS2Rel(path=as_rel_dir)
 
 
     batch_size = 7
@@ -191,7 +191,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
             print("len(curr_irr_files) <= 0")
             continue
 
-        rel_dict = sc.broadcast(asRel.getASRelDic(date))
+        rel_dict = sc.broadcast(as_rel.getASRelDic(date))
 
         roa_dict = {}
         if len(curr_roa_files) > 0:
