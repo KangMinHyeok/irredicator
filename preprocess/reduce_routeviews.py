@@ -52,7 +52,7 @@ def readBGPUpdate(arg):
 def get_target_interval(bgp_path, local_path):
 
     files = os.listdir(local_path + '/bgpdata')
-    start = max(list(map(lambda x: x.split('.')[0])))
+    start = max(list(map(lambda x: x.split('.')[0], files)))
 
     bgp_path = bgp_path + '/bgpdata/'
     subdirs = sorted(os.listdir(bgp_path), reverse=True)
