@@ -162,7 +162,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
 
 
     batch_size = 7
-    batches = [dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
+    batches = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
     print(batches)
     for batch in batches:
         curr_start, curr_end = batch[0], batch[-1]
