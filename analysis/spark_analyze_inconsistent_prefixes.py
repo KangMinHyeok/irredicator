@@ -191,7 +191,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
             print("len(curr_irr_files) <= 0")
             continue
 
-        rel_dict = sc.broadcast(as_rel.getASRelDic(date))
+        rel_dict = sc.broadcast(as_rel.getASRelDic(curr_start))
 
         roa_dict = {}
         if len(curr_roa_files) > 0:
