@@ -294,7 +294,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
                         .flatMap(toCSV)
     
         filename = 'inconsistent-prefixes-{}'.format(end)
-        write_result(results, savePath + filename, localPath + filename, extension='.csv')
+        write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
         sc.stop()
         break
