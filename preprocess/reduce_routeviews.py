@@ -62,7 +62,7 @@ def get_target_interval(bgp_path, local_path):
             continue
 
         files = list(map(lambda x: x.split('.'), files))
-        files = list(filter(lambda x: x[2] == '2300'))
+        files = list(filter(lambda x: x[2] == '2300', files))
         end = max(list(map(lambda x: x[1], files)))
         break
 
