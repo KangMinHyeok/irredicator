@@ -1,8 +1,17 @@
 # m h  dom mon dow   command
 # daily
-# get datasets
+
+##### NRO stats
+# download and put nrostat files
 0 2 * * * /home/mhkang/rpki-irr/irredicator/crontab/nrostats.sh
+
+##### IRR
+# download IRR rawdatasets and put them on hdfs
+# produce tsv files and put tsv files on hdfs
 0 4 * * * /home/mhkang/rpki-irr/irredicator/crontab/irr.sh
+
+# download VRP rawdatasets and put them on hdfs
+# produce tsv files and put tsv files on hdfs
 0 8 * * * /home/mhkang/rpki-irr/irredicator/crontab/roa.sh
 
 0 22 * * * /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
@@ -12,7 +21,7 @@
 0 3 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --rel >> /home/mhkang/rpki-irr/logs/get_as_info_rel.log 2>&1
 0 5 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --isp >> /home/mhkang/rpki-irr/logs/get_as_info_isp.log 2>&1
 
-# BGP
+##### BGP
 # downloda raw datasets
 0 1 * * * python3.8 /home/mhkang/rpki-irr/irredicator/dataset/get_routeviews.py >> /home/mhkang/rpki-irr/logs/get_routeviews.log 2>&1
 # reduce routeviews dataset for each vantage point
@@ -20,4 +29,7 @@
 # put reduced files to hdfs and reduce bgp update files for each day
 0 10 * * * /home/mhkang/rpki-irr/irredicator/crontab/put_routeviews_update.sh
 # put datasets to hdfs
+
+##### webdata
+# merge analysis output files
 0 0 * * 0 python3.8 /home/mhkang/rpki-irr/irredicator/analysis/merge_output.py >> /home/mhkang/rpki-irr/logs/merge_output.log 2>&1

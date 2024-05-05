@@ -293,8 +293,6 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
                         .groupByKey()\
                         .flatMap(toCSV)
     
-        results = prefixes
-
         filename = 'inconsistent-prefixes-{}'.format(end)
         write_result(results, savePath + filename, localPath + filename, extension='.csv')
 
