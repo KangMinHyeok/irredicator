@@ -139,7 +139,7 @@ def get_entries(date, binary_prefix, vrp_dict, irr_dict):
     irr_records = get_records(tree, record_set, binary_prefix)
 
     for prefix_addr, prefix_len, origin, source, changed in irr_records:
-        if int(prefix_len) <= int(bgp_length)
+        if int(prefix_len) <= int(bgp_length):
             irr_origins.add( (origin, source, max_len) )
 
     return list(vrp_origins), list(irr_origins)

@@ -185,7 +185,7 @@ def toCSV(row):
 
     return records
 
-def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir):
+def analyze_inconsistent_prefix(irr_dir, roa_dir, hdfs_dir, local_dir):
     hdfs_dir = hdfs_dir + 'raw/'
     make_dirs(hdfs_dir, local_dir)
 
@@ -258,16 +258,14 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
                         .groupByKey()\
                         .flatMap(toCSV)
     
-        filename = 'inconsistent-prefix-{}'.format(end)
+        filename = 'inconsistent-prefix-{}'.format(curr_end)
         write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
         sc.stop()
-        break
     
 
 def main():
     parser = argparse.ArgumentParser(description='irr rpki as relationship\n')
-    parser.add_argument('--as_rel_dir', default='/home/mhkang/caida/as-rel/data/')
 
     parser.add_argument('--irr_dir',default='/user/mhkang/irrs/daily-tsv/')
     parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
@@ -278,7 +276,7 @@ def main():
     parser.parse_args()
     args = parser.parse_args()
     print(args)
-    analyzeInconsistentObjects(args.irr_dir, args.roa_dir, args.hdfs_dir, args.local_dir, args.as_rel_dir)
+    analyze_inconsistent_prefix(args.irr_dir, args.roa_dir, args.hdfs_dir, args.local_dir)
 
 if __name__ == "__main__":
     main()
