@@ -7,6 +7,17 @@ from datetime import *
 from ipaddress import IPv4Address
 
 
+def readNcollectAsMap(sc, files, parse_func, map_func):
+    result = {}
+    if len(files) > 0:
+        result = sc.textFile(','.join(files))\
+            .flatMap(lambda line: parse_func(line))\
+            .groupByKey()\
+            .map(lambda x: (x[0], map_func(x[1])))\
+            .collectAsMap()
+    
+    return result
+
 def merge(path, extension='.csv', sort=False):
     os.makedirs(path, exist_ok=True)
 

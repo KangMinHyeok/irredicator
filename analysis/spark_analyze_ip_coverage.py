@@ -193,9 +193,9 @@ def IP_coverage(ip_version, nro_dir, roa_dir, irr_dir, hdfs_dir, local_dir):
         print("latest dates of nro, irr, and roa: {}, {}, and {}".format(max(nro_dates), max(irr_dates), max(roa_dates)))
         exit()
 
-    nro_files = list(filter(lambda x: start <= get_date(x) <= end, nro_files))
-    irr_files = list(filter(lambda x: start <= get_date(x) <= end, irr_files))
-    roa_files = list(filter(lambda x: start <= get_date(x) <= end, roa_files))
+    nro_files = list(filter(lambda x: start < get_date(x) <= end, nro_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
 
     print("target dates: {} ~ {}".format(start, end))
     

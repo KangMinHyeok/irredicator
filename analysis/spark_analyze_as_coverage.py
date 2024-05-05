@@ -141,9 +141,9 @@ def AS_coverage(ip_version, asn_dir, roa_dir, irr_dir, hdfs_dir, local_dir):
     print("target dates: {} ~ {}".format(start, end))
 
 
-    asn_files = list(filter(lambda x: start <= get_date(x) <= end, asn_files))
-    irr_files = list(filter(lambda x: start <= get_date(x) <= end, irr_files))
-    roa_files = list(filter(lambda x: start <= get_date(x) <= end, roa_files))
+    asn_files = list(filter(lambda x: start < get_date(x) <= end, asn_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
 
     conf = SparkConf().setAppName(
                 "AS Coverage"

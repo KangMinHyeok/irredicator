@@ -19,9 +19,8 @@ from pyspark import SparkContext, StorageLevel, SparkConf, broadcast
 from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
-from utils.utils import write_result, ip2binary, get_date, get_files, add2dict
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
+from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs
 from utils.binaryPrefixTree import make_binary_prefix_tree, get_records
 
 def origin2int(origin):
@@ -242,36 +241,44 @@ def build_dict(files, parse_func):
 
     return irr_dict
 
-def bgpCoverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir, start, end):
+def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     make_dirs(hdfs_dir, local_dir)
+    
+    start = max(list(map(lambda x: x.split('.')[0].split('-')[-1], os.listdir(local_dir))))
 
-    savePath = savePath + 'raw/'
-    
-    make_dirs(hdfs_dir, local_dir)
-    
     roa_files = get_files(roa_dir, extension='.tsv')
     irr_files = get_files(irr_dir, extension='.tsv')
     bgp_files = get_files(bgp_dir, extension='.tsv')
 
-    bgp_files = list(filter(lambda x: start <= get_date(x) <= end, bgp_files))
-    irr_files = list(filter(lambda x: start <= get_date(x) <= end, irr_files))
-    roa_files = list(filter(lambda x: start <= get_date(x) <= end, roa_files))
+    bgp_dates = list(map(get_date, bgp_files))
+    irr_dates = list(map(get_date, irr_files))
+    roa_dates = list(map(get_date, roa_files))
+    end = min([max(bgp_dates), max(irr_dates), max(roa_dates)])
+    
+    if end <= start:
+        print("no new data available")
+        print("end date of previpus analysis: {}".format(start))
+        print("latest dates of bgp, irr, and roa: {}, {}, and {}".format(max(bgp_dates), max(irr_dates), max(roa_dates)))
+        exit()
 
-    dates = set(map(get_date, bgp_files))
-    dates = dates.union(set(map(get_date, irr_files)))
-    dates = dates.union(set(map(get_date, roa_files)))
+    print("target dates: {} ~ {}".format(start, end))
 
-    for year in range(int(start[:4]), int(end[:4]), -1):
-        print("start {}".format(year))
-        year = str(year)
+    bgp_files = list(filter(lambda x: start < get_date(x) <= end, bgp_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
 
-        target_dates = sorted(list(filter(lambda x: x.startswith(year), dates)), reverse=True)
+    target_dates = set(map(get_date, bgp_files))
+    target_dates = target_dates.union(set(map(get_date, irr_files)))
+    target_dates = target_dates.union(set(map(get_date, roa_files)))
 
-        if len(target_dates) == 0: continue
-
+    batch_size = 7
+    batches = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
+    print(batches)
+    for batch in batches:
+        curr_start, curr_end = batch[0], batch[-1]
         conf = SparkConf(
                         ).setAppName(
-                            "BGP coverage: {}".format(year)
+                            "BGP coverage: {}-{}".format(curr_start, curr_end)
                         ).set(
                             "spark.kryoserializer.buffer.max", "1g"
                         ).set(
@@ -281,54 +288,47 @@ def bgpCoverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir, start, end):
         spark = SparkSession(sc)
         sc.setLogLevel("WARN")
 
-        for date in target_dates:
-            print('[broadcast start]: {}'.format(datetime.now()))
-            if len(targetDates) == 0: continue
-            start, end = targetDates[0], targetDates[-1]
+        target_roa_files = sorted(list(filter(lambda x: get_date(x) in batch, roa_files)))
+        target_irr_files = sorted(list(filter(lambda x: get_date(x) in batch, irr_files)))
+        target_bgp_files = sorted(list(filter(lambda x: get_date(x) in batch, bgp_files)))
 
-            appname = "{} BGP coverage: {}-{}".format(ip_version, start, end)
-            
-            target_roa_files = sorted(list(filter(lambda x: get_date(x) in target_dates, roa_files)))
-            target_irr_files = sorted(list(filter(lambda x: get_date(x) in target_dates, irr_files)))
-            target_bgp_files = sorted(list(filter(lambda x: get_date(x) in target_dates, bgp_files)))
+        irr_dict = build_dict(target_irr_files, parseIRR)
 
-            irr_dict = build_dict(target_irr_files, parseIRR)
+        roa_dict = build_dict(target_roa_files, parseVRP)
+        
+        BGPRecords  = sc.textFile(','.join(target_bgp_files))\
+                        .flatMap(lambda line: parseBGP(line))\
+                        .groupByKey()
+        
+        bBatch = sc.broadcast(batch)
+        results = BGPRecords.flatMap(lambda row: getResults(row, roaDict, irrDict, bBatch, filterTooSpecific=True, ip_version=ip_version))\
+                            .reduceByKey(addCount)\
+                            .flatMap(toCSV)
 
-            roa_dict = build_dict(target_roa_files, parseVRP)
+        filename = 'bgp-coverage-ipv4-{}'.format(end)
+        write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
-            
-            BGPRecords  = sc.textFile(','.join(target_bgp_files))\
-                            .flatMap(lambda line: parseBGP(line))\
-                            .groupByKey()
-            
-            results = BGPRecords.flatMap(lambda row: getResults(row, roaDict, irrDict, date, filterTooSpecific=True, ip_version=ip_version))\
-                                .reduceByKey(addCount)\
-                                .flatMap(toCSV)
-
-            write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
-
-            irrDict.unpersist()
-            roaDict.unpersist()
         sc.stop()
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='analyze BGP coverage')
-    parser.add_argument('--start', default='20110101')
-    parser.add_argument('--end', default='20230301')
 
-    parser.add_argument('--bgp_dir', default='/user/mhkang/bgp/routeview-reduced/')
-
+    parser.add_argument('--bgp_dir', default='/user/mhkang/routeviews/reduced/')
+    parser.add_argument('--irr_dir', default='/user/mhkang/irrs/daily-tsv/')
     parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
     
-    parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/radb/daily-tsv-w-changed/', '/user/mhkang/irrs/daily-tsv-w-changed/'])
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/bgp-coverage/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/bgp-coverage/')
 
-    parser.add_argument('--hdfs_dir', default='/user/mhkang/bgp/covered-all/')
-    parser.add_argument('--local_dir', default='/home/mhkang/bgp/covered-all/')
-    
     parser.parse_args()
     args = parser.parse_args()
     print(args)
 
-    bgpCoverage(args.bgp_dir, args.irr_dir, args.roa_dir
-        , args.hdfs_dir, args.local_dir, args.start, args.end)
+    bgp_coverage(args.bgp_dir, args.irr_dir, args.roa_dir, args.hdfs_dir, args.local_dir)
+
+
+if __name__ == '__main__':
+    main()
+
+
 

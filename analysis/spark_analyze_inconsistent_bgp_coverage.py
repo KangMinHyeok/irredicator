@@ -20,217 +20,93 @@ from pyspark import SparkContext, StorageLevel, SparkConf, broadcast
 from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
-def mergeAndSort(path, extension='.csv', label=None):
-	try: os.mkdirs(path)
-	except: pass
-
-	filename = path.split('/')[-1]
-	cmdMerge = 'find {} -name "*" -print0 | xargs -0 cat >> /tmp/tmp-spark-mhkang-{}'.format(path, filename)
-	os.system(cmdMerge)
-
-	cmdSort  = "sort -k1,1 /tmp/tmp-spark-mhkang-{} > {}".format(filename, path + extension)
-
-	os.system(cmdSort)
-	
-	if(label is not None):
-		cmd = "sed -i '1s/^/%s\\n/' %s" % (label, path +  extension)
-		os.system(cmd)
-
-	cmdErase = "rm /tmp/tmp-spark-mhkang-{}".format(filename)
-	os.system(cmdErase)
-
-def merge(path, extension='.csv'):
-	cmdErase = "rm {}".format(path + extension)
-	os.system(cmdErase)
-
-	cmdMerge = 'find {} -name "*" -print0 | xargs -0 cat >> {}'.format(path, path + extension)
-	os.system(cmdMerge)
-
-def fetchAndMerge(savePath, localPath, extension, needSort):
-
-	try: shutil.rmtree(localPath)
-	except: pass
-
-	try: os.makedirs(localPath)
-	except: pass		
-	print("fetch {}".format(savePath))
-	
-	os.system("hdfs dfs -get {} {}".format(savePath, localPath))
-	
-	# hdfs.get(savePath, localPath)
-	print("merge {}".format(localPath))
-	if needSort:
-		mergeAndSort(localPath, extension=extension)
-	else:
-		merge(localPath, extension=extension)
-	print("done {}".format(localPath))
-
-	try: shutil.rmtree(localPath)
-	except: pass
-	
-writeProcesses = []
-def saveResult(result, savePath, localPath, extension='.csv', needSort=True, useMultiprocess=False):
-	if result != None:
-		try: hdfs.rmr(savePath)
-		except: pass
-		print("save {}".format(savePath))
-		result.saveAsTextFile(savePath)
-
-		if not useMultiprocess:
-			fetchAndMerge(savePath, localPath, extension, needSort)
-		else:
-			p = Process(target=fetchAndMerge, args=(savePath, localPath, extension, needSort))
-			p.start()
-			writeProcesses.append(p)
-		return True
-	else:
-		return False
-
-def correctPrefix(prefix_addr):
-	tokens = prefix_addr.split('.')
-	newTokens = []
-	for token in tokens:
-		prevIsZero = True
-		if len(token) == 3 and token.startswith("00"):
-			newTokens.append(token[2])
-		elif len(token) >= 2 and token.startswith("0"):
-			newTokens.append(token[1:])
-		else:
-			newTokens.append(token)
-	return ".".join(newTokens)
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
+from utils.utils import write_result, ip2binary, get_date, get_files, make_dirs, readNcollectAsMap
 
 def ip2binary(prefix_addr, prefix_len):
-	try:
-		octets = None
-		if "." in prefix_addr: # IPv4
-			octets = map(lambda v: int(v), prefix_addr.split("."))
-			octets = map(lambda v: format(v, "#010b")[2:], octets)
-		elif ':' in prefix_addr: # IPv6
-			octets = map(lambda v: str(v), prefix_addr.split(":"))
-			prefix_addrs = prefix_addr.split(":")
-			for i in range( 8 - len(prefix_addrs)):
-				idx = prefix_addrs.index("")
-				prefix_addrs.insert(idx, "")
-			prefix_addrs += [""] * (8 - len(prefix_addrs)) # 8 groups, each of them has 16 bytes (= four hexadecimal digits)
-			octets = []
-			for p in prefix_addrs:
-				if( len(p) != 4): # 4 bytes
-					p = (4 - len(p)) * '0' + p
-				for bit in p:
-					b = format(int(bit, 16), "04b")
-					octets.append( b)
-		else: 
-			return None
+    if("." in prefix_addr): # IPv4
+        octets = map(lambda v: int(v), prefix_addr.split("."))
+        octets = map(lambda v: format(v, "#010b")[2:], octets)
+    else: # IPv6
+        octets = map(lambda v: str(v), prefix_addr.split(":"))
+        prefix_addrs = prefix_addr.split(":")
+        for i in range( 8 - len(prefix_addrs)):
+            idx = prefix_addrs.index("")
+            prefix_addrs.insert(idx, "")
+        prefix_addrs += [""] * (8 - len(prefix_addrs)) # 8 groups, each of them has 16 bytes (= four hexadecimal digits)
+        octets = []
+        for p in prefix_addrs:
+            if( len(p) != 4): # 4 bytes
+                p = (4 - len(p)) * '0' + p
+            for bit in p:
+                b = format(int(bit, 16), "04b")
+                octets.append( b)
+    return "".join(octets)[:int(prefix_len)]
 
-		return "".join(octets)[:int(prefix_len)]
-	except:
-		return None
-	
 
-def smInsert(tree, binary):
-	if( len(binary) == 0):
-		return
-	subtree=tree
-	for i in range(len(binary)):
-		if not (binary[i] in subtree):
-			subtree[binary[i]]={}
-		subtree=subtree[binary[i]]
-		if (i==len(binary)-1):
-			subtree['l']=True
+def make_binary_prefix_tree(records):
+    tree = {}
+    record_set = {}
+    for record in records:
+        prefix_addr, prefix_len = record[:1]
+        binary_prefix = ip2binary(prefix_addr, prefix_len)
 
-def smGetAllKeys(tree, parent):
-	result=[]
-	subtree=tree
-	subp=""
-	for t in parent:
-		if not(t in subtree):
-			break
-		subtree=subtree[t]
-		subp=subp+t
-		if 'l' in subtree:
-			result.append(subp)
-	return result
+        insert(tree, record_set, binary_prefix, record)
+        
+        
+    return tree, record_set
 
-def makeBinaryPrefixDict(records):
-	recordSets = {}
-	smtree_v4 = {}
-	smtree_v6 = {}
+def insert(tree, record_set, binary_prefix, record):
 
-	for record in records:
-		prefix_addr, prefix_len = record[0], record[1]
-		binary_prefix = ip2binary(prefix_addr, prefix_len)
+    if binary_prefix not in record_set:
+        record_set[binary_prefix] = set()
+    
+    record_set[binary_prefix].add(tuple(record))
+    insert2tree(tree, binary_prefix)
 
-		if(binary_prefix not in recordSets):
-			recordSets[binary_prefix] = set()
-		recordSets[binary_prefix].add( record )
-		if(":" in prefix_addr):
-			smInsert(smtree_v6, binary_prefix)
-		else:
-			smInsert(smtree_v4, binary_prefix)
+def insert2tree(tree, binary_prefix):
+    if len(binary_prefix) == 0:
+        return
+    
+    subtree = tree
+    for i in range(len(binary_prefix)):
+        if binary_prefix[i] not in subtree:
+            subtree[binary_prefix[i]] = {}
 
-	return recordSets, smtree_v4, smtree_v6
+        subtree = subtree[binary_prefix[i]]
 
-def getCovered(binary_prefix, smtree_v4, smtree_v6, ip_version):
-	parent = binary_prefix
-	keys = []
-	if ip_version == 'ipv4':
-		keys = smGetAllKeys(smtree_v4, parent)
-	else:
-		keys = smGetAllKeys(smtree_v6, parent)
-	keys = sorted(keys, key=lambda x: len(x))
-	return keys
+        if i == len(binary_prefix)-1:
+            subtree['l']=True
 
-def getEntries(date, binary_prefix, entryDict, ip_version='ipv4'):
-	if entryDict == None: return [], []
-	
-	recordSets, smtree_v4, smtree_v6 = entryDict.get(date, [None, None, None])
+def get_covered(tree, binary_prefix):
+    covered=[]
+    subtree = tree
+    subp=""
+    for t in binary_prefix:
+        if t not in subtree:
+            break
+        subtree = subtree[t]
+        subp = subp + t
+        if 'l' in subtree:
+            covered.append(subp)
 
-	if recordSets is None:
-		return [], []
-	entries = getCovered( binary_prefix, smtree_v4, smtree_v6, ip_version)
+    return sorted(covered, key=lambda x: len(x))
 
-	if entries is None or len(entries) == 0:
-		return [], []
+def get_records(tree, record_set, binary_prefix):
+    
+    binary_prefixes = get_covered(tree, binary_prefix)
+    
+    records = []
 
-	return recordSets, entries
+    if len(binary_prefixes) == 0:
+        return records
 
-def getVRPOrigins(date, binary_prefix, vrpDict, ip_version='ipv4'):
-	if binary_prefix == None: return [], [], []
-	length = len(binary_prefix)
-
-	vrpRecordSets, vrpEntries = getEntries(date, binary_prefix, vrpDict, ip_version)
-	
-	vrpOrigins = set()
-	vrpRecords = set()
-	for _binary_prefix in vrpEntries:
-		
-		for record in vrpRecordSets[_binary_prefix]:
-			prefix_addr, prefix_len, max_len, origin = record
-
-			if prefix_len <=  length <= max_len:
-				vrpOrigins.add( origin )
-				vrpRecords.add(tuple(record))
-	
-	return vrpOrigins, vrpRecords
+    for binary_prefix in binary_prefixes:
+        records += record_set.get(binary_prefix, [])
+    
+    return records
 
 def parseIRR(line, ip_version='ipv4'):
-	date, rir, prefix, origin, isp, country, source, changed = line.split("\t")
-
-	if ip_version == 'ipv4' and ':' in prefix: return []
-	elif ip_version == 'ipv6' and '.' in prefix: return []
-
-	try: 
-		date2 = datetime.strptime(date, "%Y%m%d")
-		prefix_addr, prefix_len = prefix.split('/')
-		prefix_len = int(prefix_len)
-		origin = int(origin)
-		date = int(date)
-	except:	return []
-
-	return [((date, prefix_addr, prefix_len), origin)]
-
-
-def parseIRR4Dict(line, ip_version='ipv4'):
 	date, rir, prefix, origin, isp, country, source, changed = line.split("\t")
 
 	if ip_version == 'ipv4' and ':' in prefix: return []
@@ -274,96 +150,7 @@ def parseVRP(line, ip_version='ipv4'):
 	
 	return [ (date, (prefix_addr, prefix_len, max_len, origin)) ]
 
-def parseIRRTotal(line, ip_version='ipv4'):
-	date, rir, prefix, origin, isp, country, source, changed = line.split("\t")
 
-	if ip_version == 'ipv4' and ':' in prefix: return []
-	elif ip_version == 'ipv6' and '.' in prefix: return []
-
-	try: 
-		date2 = datetime.strptime(date, "%Y%m%d")
-		date = int(date)
-	except:	return []
-		
-	return [(date, 1)]
-
-def parseVRPTotal(line, ip_version='ipv4'):
-	if line.startswith('#'): return []
-	tokens = line.split('\t')
-	date, prefix_addr, prefix_len, max_len, origin, num_ip, cc, rir, isp  = tokens[:9]
-	if ip_version == 'ipv4' and ':' in prefix_addr: return []
-	elif ip_version == 'ipv6' and '.' in prefix_addr: return []
-
-	try: 
-		date2 = datetime.strptime(date, "%Y%m%d")
-		date = int(date)
-	except Exception as e:	
-		return []
-	
-	return [(date, 1)]
-
-def getDate(filename):
-	date = filename.split('/')[-1]
-	if '.' in date: date = date.split('.')[0]
-	if '-' in date: date = date.split('-')[0]
-	return date
-
-def getDates(files):
-	files = map(lambda x: x.split('/')[-1], files)
-	files = filter(lambda x: x.endswith('.csv') or x.endswith('.tsv') or x.endswith('.json'), files)
-	dates = list(map(lambda x: getDate(x), files))
-	return sorted(dates)
-
-def getFiles(path, path2=None, extension='.tsv'):
-	files = hdfs.ls(path)
-	if path2 is not None:
-		files += hdfs.ls(path2)
-
-	files = list(filter(lambda x: x.endswith(extension), files))
-	return sorted(files)
-
-def filterFiles(files, date):
-	return list(filter(lambda x: getDate(x) >= date, files))
-
-def getResults(row, roaDict, filterTooSpecific=True, ip_version='ipv4'):
-	key, value  = row
-	date, prefix_addr, prefix_len = key 
-	origins = value
-	
-	if filterTooSpecific and prefix_len > 24: return []
-	binary_prefix = ip2binary(prefix_addr, prefix_len)
-	if binary_prefix == None: return []
-
-	vrpOrigins, vrpRecords = getVRPOrigins(date, binary_prefix, roaDict.value, ip_version=ip_version)
-	if len(vrpRecords) == 0: return []
-
-	results = []
-	consistent = False
-	for origin in set(origins):
-		consistent = (origin in vrpOrigins) or consistent
-		results.append( ((date, 'RADB') , 1))
-	
-	numConsistent = 1 if consistent else 0
-	numDiscrepant = 0 if consistent else 1
-	results.append( ((date, 'BOTH') , (1, numConsistent, numDiscrepant)))
-	
-	for prefix_addr, prefix_len, max_len, origin in vrpRecords:
-		results.append( ((date, prefix_addr, prefix_len, max_len, origin, 'VRP') , 1))
-
-	return results
-
-def originToInt(origin):
-	intOrigin = -1
-	try: 
-		intOrigin = int(origin)
-	except Exception as e: 
-		try:
-			upper, lower = origin.split('.')
-			intOrigin = int((int(upper) << 16) + int(lower))
-		except:
-			pass
-	return intOrigin
-	
 def parseBGP(line, ip_version='ipv4'):
 	try:
 		date, rir, prefix_addr, prefix_len, origins, ISPs, countries, totalCnt = line.split('\t')
@@ -386,8 +173,7 @@ def parseBGP(line, ip_version='ipv4'):
 	except:
 		return []
 
-	origins = list(filter(lambda x: x != -1, map(originToInt, origins)))
-	if len(origins) != 1: return []
+	origins = list(map(int, origins))
 
 	records.append( ((date, prefix_addr, prefix_len), (origins, totalCnt, rir)) )
 
@@ -425,9 +211,14 @@ def getEntries(date, binary_prefix, entryDict, ip_version='ipv4'):
 
 	return recordSets, entries
 
-def getBothOrigins(date, binary_prefix, vrpDict, irrDict, ip_version='ipv4'):
+def getBothOrigins(date, binary_prefix, vrp_dict, irr_dict, ip_version='ipv4'):
 	if binary_prefix == None: return [], [], []
 	bgp_length = len(binary_prefix)
+
+	vrp_tree, vrp_record_set = vrp_dict.get(date, ({}, {}))
+	irr_tree, irr_record_set = irr_dict.get(date, ({}, {}))
+
+	vrp_records = get_records(vrp_tree, vrp_records, binary_prefix)
 
 	vrpRecordSets, vrpEntries = getEntries(date, binary_prefix, vrpDict, ip_version)
 	
@@ -460,7 +251,6 @@ def getBgpResults(row, roaDict, irrDict, filterTooSpecific=True, ip_version='ipv
 	if binary_prefix == None: return []
 
 	vrpOrigins, irrOrigins = getBothOrigins(date, binary_prefix, roaDict.value, irrDict.value, ip_version=ip_version)
-	
 	
 	vrpCoverOrigins = set()
 	vrpValidOrigins = set()
@@ -502,160 +292,129 @@ def addBGP(valA, valB):
 	totalB, bothCoveredB, consistentB, discrepantB = valB
 	return (totalA+totalB, bothCoveredA+bothCoveredB, consistentA+consistentB, discrepantA+discrepantB)
 
-def setPath(savePath, localPath):
-	try: hdfs.mkdir(savePath)
-	except: pass
-	
-	try: os.mkdir(localPath)
-	except: pass
-
 def toCSV(row):
 	date, value = row
 	total, bothCovered, consistent, discrepant = value
 	return ','.join(list(map(str, [date, total, bothCovered, consistent, discrepant])))
 
-def addEntry(valA, valB):
-	totalA, conA, disA = valA
-	totalB, conB, disB = valB
-	return (totalA + totalB, conA + conB, disA + disB)
+def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
+	hdfs_dir = hdfs_dir + 'raw/'
+	make_dirs(hdfs_dir, local_dir)
 
-def toEntry(row):
-	key, value = row
-	date, _ = key
-	total, con, dis = value
-	return ','.join(list(map(str, [date, total, con, dis])))
+	start = max(list(map(lambda x: x.split('.')[0].split('-')[-1], os.listdir(local_dir))))
 
-def countDiscrepancy(ip_version, bgpPath, irrPath, roaPath, roaPath2, savePath, localPath):
-	setPath(savePath, localPath)
+    roa_files = get_files(roa_dir, extension='.tsv')
+    irr_files = get_files(irr_dir, extension='.tsv')
+    bgp_files = get_files(bgp_dir, extension='.tsv')
 
-	savePath = savePath + 'raw/'
-	setPath(savePath, localPath)
+    bgp_dates = list(map(get_date, bgp_files))
+    irr_dates = list(map(get_date, irr_files))
+    roa_dates = list(map(get_date, roa_files))
+    end = min([max(bgp_dates), max(irr_dates), max(roa_dates)])
+    
+    if end <= start:
+        print("no new data available")
+        print("end date of previpus analysis: {}".format(start))
+        print("latest dates of bgp, irr, and roa: {}, {}, and {}".format(max(bgp_dates), max(irr_dates), max(roa_dates)))
+        exit()
 
-	bgpFiles = getFiles(bgpPath)
-	irrFiles =  getFiles(irrPath, extension='.tsv')
-	roaFiles =  getFiles(roaPath, roaPath2, extension='.tsv')
+    print("target dates: {} ~ {}".format(start, end))
+
+	bgp_files = list(filter(lambda x: start < getDate(x) <= end, bgp_files))
+	irr_files = list(filter(lambda x: start < getDate(x) <= end, irr_files))
+	roa_files = list(filter(lambda x: start < getDate(x) <= end, roa_files))
 	
-	bgpFiles = list(filter(lambda x: '20160801' <= getDate(x) <= '20210320', bgpFiles))
-	roaFiles = list(filter(lambda x: '20160801' <= getDate(x) <= '20210320', roaFiles))
-	irrFiles = list(filter(lambda x: '20160801' <= getDate(x) <= '20210320', irrFiles))
-	
-	targetDates = sorted(list(set(getDates(bgpFiles) + getDates(roaFiles) + getDates(irrFiles))))
-
-	latestDate = sorted(os.listdir(localPath))
-	
-	currDates = []
-	if len(latestDate) > 0:
-		delta = timedelta(days=1)
-		for dates in latestDate:
-			tokens = dates.split('.')[0].split('-')
-			if len(tokens) != 2: continue
-			print(tokens)
-			start, end = tokens
-			start, end = datetime.strptime(start, "%Y%m%d"), datetime.strptime(end, "%Y%m%d")
-			while start <= end:
-				currDates.append(start.strftime("%Y%m%d"))
-				start += delta
-	
-	newDates = list(set(targetDates) - set(currDates))
-	targetDates = sorted(list(set(newDates)))
-
-	# targetDates = ['20210320']
-
-	conf = SparkConf(
-			).setAppName(
-				"count discrepant bgp " + ip_version
-			).set(
-				"spark.kryoserializer.buffer.max", "512m"
-			).set(
-				"spark.kryoserializer.buffer", "1m"
-			)
-
-	sc = SparkContext(conf=conf)
-
-	spark = SparkSession(sc)
-
-	sc.setLogLevel("WARN")
+	target_dates = sorted(list(set(getDates(bgpFiles) + getDates(roaFiles) + getDates(irrFiles))))
 
 	bgpResults = None
 	entryResults = None
 	overlapResults = None
 
-	batchSize = 5
-	batch = [targetDates[i:i + batchSize] for i in range(0, len(targetDates), batchSize)]
+	batch_size = 5
+	batch = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
 	
-	for i, dates in enumerate(batch):
-		currBgpFiles = list(filter(lambda x: getDate(x) in dates, bgpFiles))
-		currRoaFiles = list(filter(lambda x: getDate(x) in dates, roaFiles))
-		currIrrFiles = list(filter(lambda x: getDate(x) in dates, irrFiles))
+	for dates in batch:
+		end = sorted(dates)[-1]
+		curr_bgp_files = list(filter(lambda x: getDate(x) in dates, bgp_files))
+		curr_roa_files = list(filter(lambda x: getDate(x) in dates, roa_files))
+		curr_irr_files = list(filter(lambda x: getDate(x) in dates, irr_files))
 
-		if len(currRoaFiles) == 0:
-			roaDict = sc.broadcast({})
-		else:
-			roaDict = sc.textFile(','.join(currRoaFiles))\
-						.flatMap(lambda line: parseVRP(line, ip_version=ip_version))\
-						.groupByKey()\
-						.map(lambda x: (x[0], makeBinaryPrefixDict(x[1])))\
-						.collectAsMap()
+
+		conf = SparkConf(
+		).setAppName(
+			"analyze inconsistent bgp coverage: {}".format(end)
+		).set(
+			"spark.kryoserializer.buffer.max", "512m"
+		).set(
+			"spark.kryoserializer.buffer", "1m"
+		)
+
+		sc = SparkContext(conf=conf)
+
+		spark = SparkSession(sc)
+
+		sc.setLogLevel("WARN")
+
+		vrp_dict = readNcollectAsMap(sc, curr_roa_files, parseVRP, make_binary_prefix_tree)
+		irr_dict = readNcollectAsMap(sc, curr_irr_files, parseIRR, make_binary_prefix_tree)
+
+
+		# vrp_dict = {}
+		# irr_dict = {}
+
+		# if len(curr_roa_files) > 0:
+		# 	vrp_dict = sc.textFile(','.join(curr_roa_files))\
+		# 				.flatMap(lambda line: parseVRP(line))\
+		# 				.groupByKey()\
+		# 				.map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
+		# 				.collectAsMap()
 			
-			roaDict = sc.broadcast(roaDict)
+
+		# if len(curr_irr_files) >= 0:
+		# 	irr_dict = sc.textFile(','.join(curr_irr_files))\
+		# 				.flatMap(lambda line: parseIRR(line))\
+		# 				.groupByKey()\
+		# 				.map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
+		# 				.collectAsMap()
+		
+
+		vrp_dict = sc.broadcast(vrp_dict)
+		irr_dict = sc.broadcast(irr_dict)
 						
 		BGPRecords	= sc.textFile(','.join(currBgpFiles))\
 							.flatMap(parseBGP)\
 							.groupByKey()
 
-		if len(currIrrFiles) == 0:
-			irrDict = sc.broadcast({})
-		else:
-			irrDict = sc.textFile(','.join(currIrrFiles))\
-						.flatMap(lambda line: parseIRR4Dict(line, ip_version=ip_version))\
-						.groupByKey()\
-						.map(lambda x: (x[0], makeBinaryPrefixDict(x[1])))\
-						.collectAsMap()
-			
-			irrDict = sc.broadcast(irrDict)
-
-		bgpResult = BGPRecords.flatMap(lambda row: getBgpResults(row, roaDict, irrDict, filterTooSpecific=True))\
+	
+		bgpResult = BGPRecords.flatMap(lambda row: getBgpResults(row, vrp_dict, irr_dict))\
 								.reduceByKey(addBGP)\
 								.map(toCSV)
 		
-		# if bgpResults == None:
-		# 	bgpResults = bgpResult
-		# else:
-		# 	bgpResults = bgpResults.union(bgpResult)
+		filename = 'inconsistent-bgp-{}'.format(end)
 
-		dates = sorted(dates)
-		filename = '{}-{}-{}'.format(dates[0], dates[-1], ip_version)
-
-		saveResult(bgpResult, savePath + filename, localPath + filename, extension='.csv')
+		write_result(bgpResult, hdfs_dir + filename, local_dir + filename, extension='.csv')
 		
-		bgpResult.unpersist()
-		BGPRecords.unpersist()
-		irrDict.unpersist()
-		roaDict.unpersist()
+		sc.stop()
 	
 	
-	sc.stop()
 
-if __name__ == '__main__':
+def main():
 	parser = argparse.ArgumentParser(description='summarize as relationship\n')
-	parser.add_argument('--irrPath',default='/user/mhkang/radb/daily-tsv-w-changed/')
-	parser.add_argument('--irrPath2',default='/user/mhkang/irrs/daily-tsv-w-changed/')
-	parser.add_argument('--bgpPath', default='/user/mhkang/bgp/routeview-reduced/')
-	
-	parser.add_argument('--roaPath', default='/user/mhkang/vrps/daily-tsv/')
-	parser.add_argument('--roaPath2', default='/user/mhkang/vrps/daily-tsv2/')
 
-	parser.add_argument('--savePath', default='/user/mhkang/radb/discrepancy/bgp/')
-	parser.add_argument('--localPath', default='/net/data/radb/discrepancy/bgp/')
-	
+    parser.add_argument('--bgp_dir', default='/user/mhkang/routeviews/reduced/')
+    parser.add_argument('--irr_dir', default='/user/mhkang/irrs/daily-tsv/')
+    parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
+    
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/inconsistent-bgp/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/inconsistent-bgp/')
+
 	parser.parse_args()
 	args = parser.parse_args()
 	print(args)
 
-	ip_version = 'ipv4'
-	countDiscrepancy(ip_version, args.bgpPath, args.irrPath, args.roaPath, args.roaPath2, args.savePath, args.localPath)
+	count_discrepancy(args.bgp_dir, args.irr_dir, args.roa_dir, args.hdfs_dir, args.local_dir)
 	
-	# ip_version = 'ipv6'
-	# countDiscrepancy(ip_version, args.bgpPath, args.irrPath, args.roaPath, args.roaPath2, args.savePath, args.localPath)
-	
+if __name__ == '__main__':
+	main()
+
 

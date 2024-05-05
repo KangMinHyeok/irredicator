@@ -136,36 +136,7 @@ def parseIRR(line, ip_version='ipv4'):
             
     return results
 
-def parseRel(line):
-    tokens = line.replace('\n', '').split('\t')
-    if len(tokens) == 6:
-        date, source, prefix, sumRel, vrpRecords, irrRecords = tokens
-    elif len(tokens) == 5:
-        date, prefix, sumRel, vrpRecords, irrRecords = tokens
-        source = "RADB"
-    else:
-        return []
-
-    irrRecords = irrRecords.split('|')
-    if len(irrRecords) == 0: return []
-    results = []
-    
-    if sumRel == 'partial': 
-        results.append( ((date, 'ALL-IRR', 'total'), 1) )
-        results.append( ((date, source, 'total'), 1) )
-
-    else:
-        results.append( ((date, 'ALL-IRR', 'total'), 1) )
-        results.append( ((date, source, 'total'), 1) )
-        results.append( ((date, 'ALL-IRR', 'overalp'), 1) )
-        results.append( ((date, source, 'overalp'), 1) )
-        discrepancy = 'same' if sumRel == 'same' else 'discrepant'
-        results.append( ((date, 'ALL-IRR', discrepancy), 1) )
-        results.append( ((date, source, discrepancy), 1) )
-    
-    return results
-
-def getRelFunc(row, rel_dict, vrp_dict):
+def count_inconsistent_prefix(row, vrp_dict):
     key, values = row
     date, source, prefix_addr, prefix_len = key
 
@@ -178,20 +149,18 @@ def getRelFunc(row, rel_dict, vrp_dict):
     vrp_records = get_records(tree, record_set, binary_prefix)
 
     results = []
-    if len(vrp_records) != 0:
+    if len(vrp_records) != 0 and len(irr_origins) != 0:
         vrp_origins = set(map(lambda x: x[1], vrp_records))
         irr_origins = set(map(lambda x: x[0], irr_records))
         
         results.append( ((date, 'ALL-IRR', 'overalp'), 1) )
         results.append( ((date, source, 'overalp'), 1) )
-        discrepancy = 'same' if sumRel == 'same' else 'discrepant'
-        results.append( ((date, 'ALL-IRR', discrepancy), 1) )
-        results.append( ((date, source, discrepancy), 1) )
 
         same_origins = irr_origins.intersection(vrp_origins)
         discrepancy = 'same' if len(same_origins) > 0  else 'discrepant'
         results.append( ((date, 'ALL-IRR', discrepancy), 1) )
         results.append( ((date, source, discrepancy), 1) )
+
     return results
 
 def addCount(valA, valB):
@@ -223,7 +192,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
     irr_files = get_files(irr_dir, extension='.tsv')
     roa_files = get_files(roa_dir, extension='.tsv')
     
-    files = list(filter(lambda x: x.startswith('inconsistent-prefixes'), os.listdir(local_dir)))
+    files = list(filter(lambda x: x.startswith('inconsistent-prefix'), os.listdir(local_dir)))
     start = max(list(map(lambda x: x.split('.')[0].split('-')[-1], files)))
 
     irr_dates = list(map(get_date, irr_files))
@@ -237,10 +206,7 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
         exit()
 
     print("target dates: {} ~ {}".format(start, end))
-    target_dates = sorted(list(filter(lambda x: start <= x <= end, list(set(irr_dates).union(set(roa_dates))))))
-
-    as_rel = AS2Rel(path=as_rel_dir)
-
+    target_dates = sorted(list(filter(lambda x: start < x <= end, list(set(irr_dates).union(set(roa_dates))))))
 
     batch_size = 7
     batches = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
@@ -272,8 +238,6 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
             print("len(curr_irr_files) <= 0")
             continue
 
-        rel_dict = sc.broadcast(as_rel.getASRelDic(curr_start))
-
         roa_dict = {}
         if len(curr_roa_files) > 0:
             roa_dict = sc.textFile(','.join(curr_roa_files))\
@@ -288,13 +252,13 @@ def analyzeInconsistentObjects(irr_dir, roa_dir, hdfs_dir, local_dir, as_rel_dir
                         .flatMap(parseIRR)\
                         .groupByKey()
         
-        results = irr_records.flatMap(lambda row: getRelFunc(row, rel_dict, roa_dict))\
+        results = irr_records.flatMap(lambda row: count_inconsistent_prefix(row, roa_dict))\
                         .reduceByKey(addCount)\
                         .map(lambda row: (row[0][0], (row[0][1], row[0][2], row[1]) ) )\
                         .groupByKey()\
                         .flatMap(toCSV)
     
-        filename = 'inconsistent-prefixes-{}'.format(end)
+        filename = 'inconsistent-prefix-{}'.format(end)
         write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
         sc.stop()
@@ -308,8 +272,8 @@ def main():
     parser.add_argument('--irr_dir',default='/user/mhkang/irrs/daily-tsv/')
     parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
 
-    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/inconsistent-prefixes/')
-    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/inconsistent-prefixes/')
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/inconsistent-prefix/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/inconsistent-prefix/')
     
     parser.parse_args()
     args = parser.parse_args()
