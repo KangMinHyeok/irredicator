@@ -271,6 +271,8 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     target_dates = target_dates.union(set(map(get_date, irr_files)))
     target_dates = target_dates.union(set(map(get_date, roa_files)))
 
+    target_dates = sorted(list(target_dates))
+
     batch_size = 7
     batches = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
     print(batches)

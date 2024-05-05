@@ -320,9 +320,9 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
 
     print("target dates: {} ~ {}".format(start, end))
 
-    bgp_files = list(filter(lambda x: start < getDate(x) <= end, bgp_files))
-    irr_files = list(filter(lambda x: start < getDate(x) <= end, irr_files))
-    roa_files = list(filter(lambda x: start < getDate(x) <= end, roa_files))
+    bgp_files = list(filter(lambda x: start < get_date(x) <= end, bgp_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
     
     target_dates = sorted(list(set(getDates(bgpFiles) + getDates(roaFiles) + getDates(irrFiles))))
 
@@ -335,9 +335,9 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     
     for dates in batch:
         end = sorted(dates)[-1]
-        curr_bgp_files = list(filter(lambda x: getDate(x) in dates, bgp_files))
-        curr_roa_files = list(filter(lambda x: getDate(x) in dates, roa_files))
-        curr_irr_files = list(filter(lambda x: getDate(x) in dates, irr_files))
+        curr_bgp_files = list(filter(lambda x: get_date(x) in dates, bgp_files))
+        curr_roa_files = list(filter(lambda x: get_date(x) in dates, roa_files))
+        curr_irr_files = list(filter(lambda x: get_date(x) in dates, irr_files))
 
 
         conf = SparkConf(
