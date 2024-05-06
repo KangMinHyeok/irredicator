@@ -1,6 +1,7 @@
 # m h  dom mon dow   command
-########## BEGIN daily
+#################### BEGIN daily ####################
 
+####### Datasets ######
 ##### NRO stats
 # download and put nrostat files
 0 2 * * * /home/mhkang/rpki-irr/irredicator/crontab/nrostats.sh
@@ -15,10 +16,6 @@
 # produce tsv files and put tsv files on hdfs
 0 8 * * * /home/mhkang/rpki-irr/irredicator/crontab/roa.sh
 
-
-##### analysis
-# analyze IP coverage and AS coverage
-0 22 * * * /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
 
 ##### CAIDA dataset
 # download as2rel dataset
@@ -35,12 +32,18 @@
 # put reduced files on hdfs
 0 10 * * * /home/mhkang/rpki-irr/irredicator/crontab/routeviews.sh
 # put datasets to hdfs
-########## END daily
 
-########## BEGIN weekly
+####### Analysis ######
+# analyze IP coverage and AS coverage
+0 18 * * * /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
+0 20 * * * /home/mhkang/rpki-irr/irredicator/crontab/inconsistency.sh
+
+#################### END daily ####################
+
+#################### BEGIN weekly ####################
 
 ##### webdata
 # merge analysis output files
 0 0 * * 0 python3.8 /home/mhkang/rpki-irr/irredicator/analysis/merge_output.py >> /home/mhkang/rpki-irr/logs/merge_output.log 2>&1
 
-########## END weekly
+#################### END weekly ########################################
