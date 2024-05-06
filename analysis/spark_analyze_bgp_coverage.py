@@ -20,7 +20,18 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs, readNcollectAsMap
+from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs
+
+def readNcollectAsMap(sc, files, parse_func):
+    result = {}
+    if len(files) > 0:
+        result = sc.textFile(','.join(files))\
+            .flatMap(lambda line: parse_func(line))\
+            .groupByKey()\
+            .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
+            .collectAsMap()
+    
+    return result
 
 def make_binary_prefix_tree(records):
     tree = {}
@@ -355,9 +366,9 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
         target_irr_files = sorted(list(filter(lambda x: get_date(x) in batch, irr_files)))
         target_bgp_files = sorted(list(filter(lambda x: get_date(x) in batch, bgp_files)))
 
-        irr_dict = readNcollectAsMap(sc, target_irr_files, parseIRR, make_binary_prefix_tree)
+        irr_dict = readNcollectAsMap(sc, target_irr_files, parseIRR)
 
-        roa_dict = readNcollectAsMap(sc, target_roa_files, parseVRP, make_binary_prefix_tree)
+        roa_dict = readNcollectAsMap(sc, target_roa_files, parseVRP)
 
         BGPRecords  = sc.textFile(','.join(target_bgp_files))\
                         .flatMap(lambda line: parseBGP(line))\

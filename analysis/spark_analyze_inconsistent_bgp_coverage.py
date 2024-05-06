@@ -21,7 +21,18 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, ip2binary, get_date, get_dates, get_files, make_dirs, readNcollectAsMap
+from utils.utils import write_result, ip2binary, get_date, get_dates, get_files, make_dirs
+
+def readNcollectAsMap(sc, files, parse_func):
+    result = {}
+    if len(files) > 0:
+        result = sc.textFile(','.join(files))\
+            .flatMap(lambda line: parse_func(line))\
+            .groupByKey()\
+            .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
+            .collectAsMap()
+    
+    return result
 
 def ip2binary(prefix_addr, prefix_len):
     if("." in prefix_addr): # IPv4
@@ -355,8 +366,8 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
 
         sc.setLogLevel("WARN")
 
-        vrp_dict = readNcollectAsMap(sc, curr_roa_files, parseVRP, make_binary_prefix_tree)
-        irr_dict = readNcollectAsMap(sc, curr_irr_files, parseIRR, make_binary_prefix_tree)
+        vrp_dict = readNcollectAsMap(sc, curr_roa_files, parseVRP)
+        irr_dict = readNcollectAsMap(sc, curr_irr_files, parseIRR)
 
 
         # vrp_dict = {}
