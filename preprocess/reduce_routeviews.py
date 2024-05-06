@@ -106,7 +106,7 @@ def parseBGPUpdate(bgp_path, local_path):
 
                 arg_list = []
                 file_path = "{}/{}.{}/UPDATES/updates.{}".format(source_path, year, month, date)
-                for i in range(0, 24, 2):
+                for i in range(0, 24):
                     filename = file_path + ".{0:02}00.bz2".format(i)
                     arg_list.append((vpName, filename))
 
