@@ -174,7 +174,6 @@ def toCSV(row):
 maxLen = 30
 
 def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
-    make_dirs(hdfs_path, local_path)
     
     hdfs_path = hdfs_path + 'raw/'
     make_dirs(hdfs_path, local_path)
@@ -214,7 +213,7 @@ def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
         
         print("start {} - {}".format(start, end))
         conf = SparkConf().setAppName(
-                    "preprocess BGP: {} - {}".format(start, end)
+                    "reduce BGP: {} - {}".format(start, end)
                     ).set(
                         "spark.kryoserializer.buffer.max", "512m"
                     ).set(
