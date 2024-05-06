@@ -324,7 +324,7 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
     roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
     
-    target_dates = sorted(list(set(get_dates(bgpFiles) + get_dates(roaFiles) + get_dates(irrFiles))))
+    target_dates = sorted(list(set(get_dates(bgp_files) + get_dates(roa_files) + get_dates(irr_files))))
 
     bgpResults = None
     entryResults = None
