@@ -177,43 +177,54 @@ def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
     
     hdfs_path = hdfs_path + 'raw/'
     make_dirs(hdfs_path, local_path)
+
+    start = max(list(map(lambda x: x.split('.')[0], os.listdir(local_path))))
     
     subdirs = hdfs.ls(bgpPath)
-    bgpFiles = []
+    bgp_files = []
     for subdir in subdirs:
-        bgpFiles += hdfs.ls(subdir)
-    bgpFiles = list(filter(lambda x: x.endswith('.txt'), bgpFiles))
+        bgp_files += hdfs.ls(subdir)
+    bgp_files = list(filter(lambda x: x.endswith('.txt'), bgp_files))
+    bgp_dates = list(map(get_date, bgp_files))
 
-    nroFiles = hdfs.ls(nroPath)
-    nroFiles = list(filter(lambda x: x.endswith('.csv'), nroFiles))
+    nro_files = hdfs.ls(nroPath)
+    nro_files = list(filter(lambda x: x.endswith('.csv'), nro_files))
+    nro_dates = get_dates(nro_files)
 
-    nrodates = get_dates(nroFiles)
-    currdates = get_dates(os.listdir(local_path))
-    newdates = get_dates(bgpFiles)
-    targetDates = sorted(list(set(newdates) - set(currdates)))
     
-    if len(targetDates) == 0:
+    end = max(bgp_dates)
+    
+    if end <= start:
+        print("no new data available")
+        print("end date of previpus analysis: {}".format(start))
+        print("latest dates of bgp: {}, {}, and {}".format(max(bgp_dates)))
+        exit()
+
+    print("target dates: {} ~ {}".format(start, end))
+
+    target_dates = list(filter(lambda x: start < x <= end, bgp_dates))
+    
+    if len(target_dates) == 0:
         print("no bgp file")
         exit()
     
-    print("Target dates: {} - {}".format(targetDates[0], targetDates[-1]))
     asISP = AS2ISP(asISPPath)
 
     batchSize = maxLen - 1
-    targetBatch = [targetDates[i:i + batchSize] for i in range(0, len(targetDates), batchSize )]
+    batch = [target_dates[i:i + batchSize] for i in range(0, len(target_dates), batchSize )]
 
-    for targetDates in targetBatch:
-        currBgpFiles = sorted(list(filter(lambda x: get_date(x) in targetDates, bgpFiles)))
+    for dates in batch:
+        curr_bgp_files = sorted(list(filter(lambda x: get_date(x) in dates, bgp_files)))
         
-        start, end = targetDates[0], targetDates[-1]
+        curr_start, curr_end = dates[0], dates[-1]
 
-        if len(currBgpFiles) == 0:
-            print("No BGP! skip {} - {}".format(start, end))
+        if len(curr_bgp_files) == 0:
+            print("No BGP! skip {} - {}".format(curr_start, curr_end))
             continue
         
-        print("start {} - {}".format(start, end))
+        print("start {} - {}".format(curr_start, curr_end))
         conf = SparkConf().setAppName(
-                    "reduce BGP: {} - {}".format(start, end)
+                    "reduce BGP: {} - {}".format(curr_start, curr_end)
                     ).set(
                         "spark.kryoserializer.buffer.max", "512m"
                     ).set(
@@ -227,15 +238,15 @@ def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
         sc.setLogLevel("WARN")
         
         records = None
-        for currDate in targetDates:
-            currNroFiles = sorted(list(filter(lambda x: get_date(x) == currDate, nroFiles)))
-            if len(currNroFiles) == 0: 
-                diff = list(map(lambda v: abs( (datetime.strptime(v, "%Y%m%d") - datetime.strptime(currDate, "%Y%m%d")).days), nrodates))
+        for date in dates:
+            curr_nro_files = sorted(list(filter(lambda x: get_date(x) == date, nro_files)))
+            if len(curr_nro_files) == 0: 
+                diff = list(map(lambda v: abs( (datetime.strptime(v, "%Y%m%d") - datetime.strptime(date, "%Y%m%d")).days), nro_dates))
 
-                nrodate = nrodates[diff.index(min(diff))]
-                currNroFiles = list(filter(lambda x: get_date(x) == nrodate, nroFiles))
+                nrodate = nro_dates[diff.index(min(diff))]
+                curr_nro_files = list(filter(lambda x: get_date(x) == nrodate, nro_files))
 
-            nroDict  = sc.textFile(','.join(currNroFiles))\
+            nroDict  = sc.textFile(','.join(curr_nro_files))\
                         .flatMap(lambda line: parseNRO(line))\
                         .groupByKey()\
                         .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
@@ -243,40 +254,24 @@ def reduceBGP(bgpPath, asISPPath, nroPath, hdfs_path, local_path):
             
             nroDict = sc.broadcast(nroDict)
 
-            asISPDict = asISP.getASISPDict(currDate)
+            asISPDict = asISP.getASISPDict(date)
             asISPDict = sc.broadcast(asISPDict)
 
-            currBgpFiles = sorted(list(filter(lambda x: get_date(x) == currDate, bgpFiles)))
+            curr_bgp_files = sorted(list(filter(lambda x: get_date(x) == date, bgp_files)))
 
-            if len(currBgpFiles) == 0: continue
+            if len(curr_bgp_files) == 0: continue
             results = None
-            # for currBgpFile in currBgpFiles:
-            print(currBgpFiles)
 
-            results = sc.textFile(','.join(currBgpFiles))\
+            results = sc.textFile(','.join(curr_bgp_files))\
                             .flatMap(lambda line: parseBGP4MP(line, asISPDict, nroDict))\
                             .reduceByKey(add)\
                             .map(toCSV)
-            
-            # if results == None:
-            #     results = currRecords
-            # else:
-            #     results = results.union(currRecords)\
-                                # .reduceByKey(add)
-                # print(results.count())
-                # print(results.top(2))
-                # currRecords.unpersist()
 
-            # results = results.map(toCSV)
-
-            curr_hdfs_path = "{}{}".format(hdfs_path, currDate)
-            curr_local_path = "{}{}".format(local_path, currDate)
+            curr_hdfs_path = "{}{}".format(hdfs_path, date)
+            curr_local_path = "{}{}".format(local_path, date)
             write_result(results, curr_hdfs_path, curr_local_path, extension='.tsv')
             
-            # results.unpersist()
-            # nroDict.unpersist()
-            # asISPDict.unpersist()
-
+            
         sc.stop()
     
 def reduceBGPDataset():
