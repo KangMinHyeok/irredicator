@@ -6,6 +6,7 @@ import argparse
 import random
 
 import json
+from ipaddress import IPv4Address
 from multiprocessing import Process
 import subprocess
 
@@ -20,7 +21,11 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, get_date, get_files, add2dict, make_dirs
+from utils.utils import write_result, get_date, get_files, make_dirs
+
+def add2dict(d, key, value):
+    if key not in d: d[key] = set()
+    d[key].add(value)
 
 def ip2binary(prefix_addr, prefix_len):
     if("." in prefix_addr): # IPv4
@@ -41,7 +46,6 @@ def ip2binary(prefix_addr, prefix_len):
                 b = format(int(bit, 16), "04b")
                 octets.append( b)
     return "".join(octets)[:int(prefix_len)]
-
 
 def readNcollectAsMap(sc, files, parse_func):
     result = {}
