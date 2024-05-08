@@ -150,11 +150,8 @@ def count_inconsistent_prefix(row, vrp_dict):
 
     results = []
     if len(vrp_records) != 0 and len(irr_records) != 0:
-        vrp_origins = set(map(lambda x: int(x[1]), vrp_records))
+        vrp_origins = set(map(lambda x: int(x[3]), vrp_records))
         irr_origins = set(map(lambda x: int(x[0]), irr_records))
-        print(vrp_origins)
-        print(irr_origins)
-        exit()
         
         results.append( ((date, 'ALL-IRR', 'overalp'), 1) )
         results.append( ((date, source, 'overalp'), 1) )
