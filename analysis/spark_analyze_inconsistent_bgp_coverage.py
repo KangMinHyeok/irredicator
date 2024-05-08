@@ -247,7 +247,7 @@ def getBgpResults(row, vrp_dict, irr_dict, filterTooSpecific=True, ip_version='i
                 valid_against_irr = bgp_origin in irr_origins 
                 valid_against_vrp = bgp_origin in vrp_valid_origins
                 
-                if valid_against_irr == valid_against_vrp
+                if valid_against_irr == valid_against_vrp:
                     consistent = 1
                     discrepant = 0
                 else:
