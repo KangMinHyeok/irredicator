@@ -161,7 +161,6 @@ def parseVRP(line, ip_version='ipv4'):
     
     return [ (date, (prefix_addr, prefix_len, max_len, origin)) ]
 
-
 def parseBGP(line, ip_version='ipv4'):
     try:
         date, rir, prefix_addr, prefix_len, origins, ISPs, countries, totalCnt = line.split('\t')
@@ -190,69 +189,7 @@ def parseBGP(line, ip_version='ipv4'):
 
     return records
 
-def toResult(row):
-    key, value = row
-    date = key
-    
-    try:
-        a, irrTotalCount = value
-        b, irrBothCount = a
-        c, roaTotalCount = b
-        bothCoveredCount, roaBothCount = c
-    except:
-        try:
-            bothCoveredCount, roaBothCount, roaTotalCount, irrBothCount, irrTotalCount = row
-        except:
-            raise Exception("row: {}".format(list(row)))
-
-    record = list(map(str, [date, bothCoveredCount, roaBothCount, roaTotalCount, irrBothCount, irrTotalCount]))
-    return ','.join(record)
-
-def getEntries(date, binary_prefix, entryDict, ip_version='ipv4'):
-    if entryDict == None: return [], []
-    
-    recordSets, smtree_v4, smtree_v6 = entryDict.get(date, [None, None, None])
-
-    if recordSets is None:
-        return [], []
-    entries = getCovered( binary_prefix, smtree_v4, smtree_v6, ip_version)
-
-    if entries is None or len(entries) == 0:
-        return [], []
-
-    return recordSets, entries
-
-def getBothOrigins(date, binary_prefix, vrp_dict, irr_dict, ip_version='ipv4'):
-    if binary_prefix == None: return [], [], []
-    bgp_length = len(binary_prefix)
-
-    vrp_tree, vrp_record_set = vrp_dict.get(date, ({}, {}))
-    irr_tree, irr_record_set = irr_dict.get(date, ({}, {}))
-
-    vrp_records = get_records(vrp_tree, vrp_records, binary_prefix)
-
-    vrpRecordSets, vrpEntries = getEntries(date, binary_prefix, vrpDict, ip_version)
-    
-    vrpOrigins = set()
-    for _binary_prefix in vrpEntries:
-        for record in vrpRecordSets[_binary_prefix]:
-            prefix_addr, prefix_len, max_len, origin = record
-
-            if prefix_len <=  bgp_length:# and int(bgp_length) <= int(max_len):
-                vrpOrigins.add( (origin, max_len) )
-
-    irrRecordSets, irrEntries = getEntries(date, binary_prefix, irrDict, ip_version)
-    
-    irrOrigins = set()
-    for _binary_prefix in irrEntries:
-        for record in irrRecordSets[_binary_prefix]:
-            prefix_addr, prefix_len, origin = record
-            if prefix_len <=  bgp_length:
-                irrOrigins.add( origin )
-
-    return list(vrpOrigins), list(irrOrigins)
-
-def getBgpResults(row, roaDict, irrDict, filterTooSpecific=True, ip_version='ipv4'):
+def getBgpResults(row, vrp_dict, irr_dict, filterTooSpecific=True, ip_version='ipv4'):
     key, value  = row
     date, prefix_addr, prefix_len = key 
     BGPs = value
@@ -261,40 +198,66 @@ def getBgpResults(row, roaDict, irrDict, filterTooSpecific=True, ip_version='ipv
     binary_prefix = ip2binary(prefix_addr, prefix_len)
     if binary_prefix == None: return []
 
-    vrpOrigins, irrOrigins = getBothOrigins(date, binary_prefix, roaDict.value, irrDict.value, ip_version=ip_version)
-    
-    vrpCoverOrigins = set()
-    vrpValidOrigins = set()
+    vrp_dict = vrp_dict.value
+    irr_dict = irr_dict.value
 
-    for origin, max_len in vrpOrigins:
-        vrpCoverOrigins.add(origin)
-        if prefix_len <= max_len:
-            vrpValidOrigins.add(origin)
-        
+    vrp_tree, vrp_record_set = vrp_dict.get(date, ({}, {}))
+    irr_tree, irr_record_set = irr_dict.get(date, ({}, {}))
+
+    vrp_records = get_records(vrp_tree, vrp_record_set, binary_prefix)
+    irr_records = get_records(vrp_tree, vrp_record_set, binary_prefix)
+
+    bgp_length = len(binary_prefix)
+
+    vrp_covered_origins = set()
+    vrp_valid_origins = set()
+
+    for record in vrp_records:
+        vrp_prefix_addr, vrp_prefix_len, vrp_max_len, vrp_origin = record
+
+        if vrp_prefix_len <=  prefix_len:
+            vrp_covered_origins.add( origin )
+            if prefix_len <= vrp_max_len:
+                vrp_valid_origins.add( origin )
+    
+    irr_origins = list(
+                    map(lambda x: x[2], 
+                        filter(lambda x: x[1] <= prefix_len, 
+                    irr_records)
+                        )
+                    )
+    
     results = []
 
     total = 1
-    vrpCover = len(vrpCoverOrigins) > 0
-    irrCover = len(irrOrigins) > 0
-    bothCovered = 1 if vrpCover and irrCover else 0
+    covered_by_vrp = len(vrp_covered_origins) > 0
+    covered_by_irr = len(irr_origins) > 0
+    covered_by_both = 1 if covered_by_vrp and covered_by_irr else 0
 
-    for BGPorigins, totalCnt, rir in BGPs:
-        if len(BGPorigins) <= 0: continue
-        consistent = 0
-        discrepant = 0
+    for BGP_origins, total_cnt, rir in BGPs:
+        if len(BGP_origins) <= 0: continue
+        
             
-        if bothCovered == 1:
-            if len(BGPorigins) > 1:
+        if covered_by_both == 1:
+            if len(BGP_origins) > 1:
                 consistent = 1
+                discrepant = 0
             else:
-                bgpOrigin = BGPorigins[0]
-                irrValid = bgpOrigin in irrOrigins 
-                vrpValid = bgpOrigin in vrpValidOrigins
-                if (irrValid and vrpValid) or (not irrValid and not vrpValid):
+                bgp_origin = BGP_origins[0]
+                valid_against_irr = bgp_origin in irr_origins 
+                valid_against_vrp = bgp_origin in vrp_valid_origins
+                
+                if valid_against_irr == valid_against_vrp
                     consistent = 1
+                    discrepant = 0
                 else:
+                    consistent = 0
                     discrepant = 1
-        results.append( (date, (total, bothCovered, consistent, discrepant)) )
+        else:
+            consistent = 0
+            discrepant = 0
+
+        results.append( (date, (total, covered_by_both, consistent, discrepant)) )
 
     return results
 

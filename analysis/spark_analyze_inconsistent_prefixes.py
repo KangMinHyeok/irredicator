@@ -150,8 +150,11 @@ def count_inconsistent_prefix(row, vrp_dict):
 
     results = []
     if len(vrp_records) != 0 and len(irr_records) != 0:
-        vrp_origins = set(map(lambda x: x[1], vrp_records))
-        irr_origins = set(map(lambda x: x[0], irr_records))
+        vrp_origins = set(map(lambda x: int(x[1]), vrp_records))
+        irr_origins = set(map(lambda x: int(x[0]), irr_records))
+        print(vrp_origins)
+        print(irr_origins)
+        exit()
         
         results.append( ((date, 'ALL-IRR', 'overalp'), 1) )
         results.append( ((date, source, 'overalp'), 1) )
@@ -202,7 +205,7 @@ def analyze_inconsistent_prefix(irr_dir, roa_dir, hdfs_dir, local_dir):
     if end <= start:
         print("no new data available")
         print("end date of previpus analysis: {}".format(start))
-        print("latest dates of nro, irr, and roa: {}, {}, and {}".format(max(nro_dates), max(irr_dates), max(roa_dates)))
+        print("latest dates of irr and roa: {}, and {}".format(max(irr_dates), max(roa_dates)))
         exit()
 
     print("target dates: {} ~ {}".format(start, end))
