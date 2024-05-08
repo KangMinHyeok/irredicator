@@ -20,7 +20,28 @@ from multiprocessing import Process
 import pydoop.hdfs as hdfs
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
-from utils.utils import write_result, ip2binary, get_date, get_files, add2dict, make_dirs
+from utils.utils import write_result, get_date, get_files, add2dict, make_dirs
+
+def ip2binary(prefix_addr, prefix_len):
+    if("." in prefix_addr): # IPv4
+        octets = map(lambda v: int(v), prefix_addr.split("."))
+        octets = map(lambda v: format(v, "#010b")[2:], octets)
+    else: # IPv6
+        octets = map(lambda v: str(v), prefix_addr.split(":"))
+        prefix_addrs = prefix_addr.split(":")
+        for i in range( 8 - len(prefix_addrs)):
+            idx = prefix_addrs.index("")
+            prefix_addrs.insert(idx, "")
+        prefix_addrs += [""] * (8 - len(prefix_addrs)) # 8 groups, each of them has 16 bytes (= four hexadecimal digits)
+        octets = []
+        for p in prefix_addrs:
+            if( len(p) != 4): # 4 bytes
+                p = (4 - len(p)) * '0' + p
+            for bit in p:
+                b = format(int(bit, 16), "04b")
+                octets.append( b)
+    return "".join(octets)[:int(prefix_len)]
+
 
 def readNcollectAsMap(sc, files, parse_func):
     result = {}
