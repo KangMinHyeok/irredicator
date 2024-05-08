@@ -116,16 +116,6 @@ def get_records(tree, record_set, binary_prefix):
     
     return records
 
-def origin2int(origin):
-    int_origin = -1
-    if '.' in origin:
-        upper, lower = origin.split('.')
-        int_origin = int((int(upper) << 16) + int(lower))
-    else:
-        int_origin = int(origin)
-    return int_origin
-    
-
 def parseBGP(line, ip_version='ipv4'):
     try:
         date, rir, prefix_addr, prefix_len, origins, ISPs, countries, totalCnt = line.split('\t')
@@ -149,7 +139,7 @@ def parseBGP(line, ip_version='ipv4'):
     except:
         return []
 
-    origins = list(filter(lambda x: x != -1, map(origin2intInt, origins)))
+    origins = list(filter(lambda x: x != -1, map(int, origins)))
     if len(origins) <= 0: return []
 
     records.append( ((date, prefix_addr, prefix_len), (origins, totalCnt, rir)) )
@@ -174,7 +164,7 @@ def parseIRR(line, ip_version='ipv4'):
         else:
             origin = origin.replace('AS', '')
         
-        origin = origin2int(origin)
+        origin = int(origin)
         
         prefix_addr, prefix_len = prefix.split('/')
         prefix_len = int(prefix_len)
@@ -197,7 +187,7 @@ def parseVRP(line, ip_version='ipv4'):
     try: 
         date2 = datetime.strptime(date, "%Y%m%d")
         date = int(date)
-        origin = origin2int(origin)
+        origin = int(origin)
         prefix_len = int(prefix_len)
         max_len = int(max_len) if max_len != None and max_len != "None" else prefix_len
 

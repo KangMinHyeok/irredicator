@@ -216,9 +216,9 @@ def getBgpResults(row, vrp_dict, irr_dict, filterTooSpecific=True, ip_version='i
         vrp_prefix_addr, vrp_prefix_len, vrp_max_len, vrp_origin = record
 
         if vrp_prefix_len <=  prefix_len:
-            vrp_covered_origins.add( origin )
+            vrp_covered_origins.add( vrp_origin )
             if prefix_len <= vrp_max_len:
-                vrp_valid_origins.add( origin )
+                vrp_valid_origins.add( vrp_origin )
     
     irr_origins = list(
                     map(lambda x: x[2], 
