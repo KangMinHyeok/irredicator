@@ -369,33 +369,12 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
         vrp_dict = readNcollectAsMap(sc, curr_roa_files, parseVRP)
         irr_dict = readNcollectAsMap(sc, curr_irr_files, parseIRR)
 
-
-        # vrp_dict = {}
-        # irr_dict = {}
-
-        # if len(curr_roa_files) > 0:
-        #   vrp_dict = sc.textFile(','.join(curr_roa_files))\
-        #               .flatMap(lambda line: parseVRP(line))\
-        #               .groupByKey()\
-        #               .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
-        #               .collectAsMap()
-            
-
-        # if len(curr_irr_files) >= 0:
-        #   irr_dict = sc.textFile(','.join(curr_irr_files))\
-        #               .flatMap(lambda line: parseIRR(line))\
-        #               .groupByKey()\
-        #               .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
-        #               .collectAsMap()
-        
-
         vrp_dict = sc.broadcast(vrp_dict)
         irr_dict = sc.broadcast(irr_dict)
                         
-        BGPRecords  = sc.textFile(','.join(currBgpFiles))\
+        BGPRecords  = sc.textFile(','.join(curr_bgp_files))\
                             .flatMap(parseBGP)\
                             .groupByKey()
-
     
         bgpResult = BGPRecords.flatMap(lambda row: getBgpResults(row, vrp_dict, irr_dict))\
                                 .reduceByKey(addBGP)\
