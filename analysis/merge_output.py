@@ -170,7 +170,5 @@ def main():
 	get_func = get_inconsistent_value
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 
-
-
 if __name__ == '__main__':
 	main()

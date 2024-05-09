@@ -241,7 +241,7 @@ def getCounts(bgpOrigin, origins, vrpCover, vrpValid):
 
     return [numCover, numValid, numBothCover, numBothValid]
 
-def getResults(row, roaDict, irrDict, bTargetDates, filterTooSpecific=True, ip_version='ipv4'):
+def getResults(row, roaDict, irrDict, bTargetDates, filterTooSpecific=True):
     key, value  = row
     date, prefix_addr, prefix_len = key 
     BGPs = value
@@ -390,7 +390,7 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
                         .groupByKey()
         
         bBatch = sc.broadcast(batch)
-        results = BGPRecords.flatMap(lambda row: getResults(row, roa_dict, irr_dict, bBatch, filterTooSpecific=True, ip_version=ip_version))\
+        results = BGPRecords.flatMap(lambda row: getResults(row, roa_dict, irr_dict, bBatch))\
                             .reduceByKey(addCount)\
                             .flatMap(toCSV)
 
