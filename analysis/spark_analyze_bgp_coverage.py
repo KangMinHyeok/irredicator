@@ -122,8 +122,13 @@ def get_records(tree, record_set, binary_prefix):
 
 def parseBGP(line, ip_version='ipv4'):
     try:
-        date, rir, prefix_addr, prefix_len, origins, ISPs, countries, totalCnt = line.split('\t')
-    except:
+        tokens = line.split('\t')
+        date, rir, prefix_addr, prefix_len, origins, ISPs, countries, totalCnt = tokens
+    except Exception as e:
+        print(e)
+        print(line)
+        print(tokens)
+        raise Exception(e)
         return []
 
     if ip_version == 'ipv4' and ':' in prefix_addr: return []
@@ -134,17 +139,23 @@ def parseBGP(line, ip_version='ipv4'):
 
     prefix_len = int(prefix_len)
     
-    
     records = []
 
     try:
         date = int(date)
         totalCnt = int(totalCnt)
-    except:
+    except Exception as e:
+        print(e)
+        print(date)
+        print(totalCnt)
+        raise Exception(e)
         return []
 
     origins = list(filter(lambda x: x != -1, map(int, origins)))
-    if len(origins) <= 0: return []
+    if len(origins) <= 0: 
+        print(origins)
+        raise Exception("len(origins) <= 0")
+        return []
 
     records.append( ((date, prefix_addr, prefix_len), (origins, totalCnt, rir)) )
 
@@ -200,12 +211,6 @@ def parseVRP(line, ip_version='ipv4'):
     
     return [ (date, (prefix_addr, prefix_len, max_len, origin, 'VRP')) ]
     
-def toCSV(row):
-    key, value = row
-    date, rir, source = key
-    
-    data = [date, rir, source] + list(value)
-    return [",".join(list(map(str, data)))]
 
 def get_entries(date, binary_prefix, vrp_dict, irr_dict):
     if binary_prefix == None: return [], [], []
@@ -227,32 +232,22 @@ def get_entries(date, binary_prefix, vrp_dict, irr_dict):
 
     for prefix_addr, prefix_len, origin, source, changed in irr_records:
         if int(prefix_len) <= int(bgp_length):
-            irr_origins.add( (origin, source, max_len) )
+            irr_origins.add( (origin, source) )
 
     return list(vrp_origins), list(irr_origins)
 
-def getCounts(bgpOrigin, origins, vrpCover, vrpValid):
-
-    cover = len(origins) > 0
-    numCover = 1 if cover else 0
-
-    valid = bgpOrigin != -1 and bgpOrigin in origins
-    numValid = 1 if valid else 0
-
-    return [numCover, numValid, numBothCover, numBothValid]
-
-def getResults(row, roaDict, irrDict, bTargetDates, filterTooSpecific=True):
+def getResults(row, roa_dict, irr_dict, filterTooSpecific=True):
     key, value  = row
     date, prefix_addr, prefix_len = key 
     BGPs = value
     
-    if date not in bTargetDates.value: return []
+    # if date not in bTargetDates.value: return []
     if filterTooSpecific and prefix_len > 24: return []
     binary_prefix = ip2binary(prefix_addr, prefix_len)
     if binary_prefix == None: return []
     entryDict = {}
 
-    vrp_entries, irr_entries = get_entries(date, binary_prefix, roaDict.value, irrDict.value)
+    vrp_entries, irr_entries = get_entries(date, binary_prefix, roa_dict.value, irr_dict.value)
     
     
     vrp_origins = set()
@@ -264,69 +259,67 @@ def getResults(row, roaDict, irrDict, bTargetDates, filterTooSpecific=True):
             valid_vrp_origins.add(origin)
     
     keys = ['AFRINIC', 'APNIC', 'ARIN', 'LACNIC', 'RIPE', 'RADB', 'ALL-IRR']
-    irr_dict, irrd4_dict = {}, {}
+    irr_origin_dict = {}
+    # , irrd4_origins = {}, {}
     for key in keys:
-        irr_dict[key] = set()
-        irrd4_dict[key] = set()
+        irr_origin_dict[key] = set()
+        # irrd4_origins[key] = set()
         
-    for origin, source, changed in irr_entries:
-        add2dict(irr_dict, 'ALL-IRR', origin)
-        add2dict(irr_dict, source, origin)
+    for origin, source in irr_entries:
+        add2dict(irr_origin_dict, 'ALL-IRR', origin)
+        add2dict(irr_origin_dict, source, origin)
         
     results = []
     RIR = 'total'
-    
+    total = 1
     vrp_covered = 1 if len(vrp_origins) > 0 else 0
 
     for BGPorigins, totalCnt, rir in BGPs:
         if len(BGPorigins) == 0: continue
-        numCover, numValid, numBothCover, numBothValid = [0] * 4
 
         if len(BGPorigins) > 1: 
-            source = 'VRP'
-            vrpValid = False
-            vrpCnts = [numVrpCover, 0, 0, 0]
-            cnts = [1] + vrpCnts + ([0] * (4 * 4))
-            results.append( ((date, RIR, source), cnts))
+            
+            vrp_valid = 0
+            vrp_cnts = [total, vrp_covered, vrp_valid]
+            
+            results.append( ((date, RIR, 'VRP'), vrp_cnts))
 
             for key in keys:
-                irr_origins = irrDict.get(key, set())
-                covered = 1 if len(origins) > 0 else 0
-                valid = 0
-                cnts = [1, covered, valid]
-                results.append( ((date, RIR, key), cnts))
+                irr_origins = irr_origin_dict.get(key, set())
+                
+                irr_covered = 1 if len(irr_origins) > 0 else 0
+                irr_valid = 0
+                irr_cnts = [total, irr_covered, irr_valid]
+                
+                results.append( ((date, RIR, key), irr_cnts))
         else:
             bgp_origin = BGPorigins[0]
-            source = 'VRP'
+            
             vrp_valid = 1 if bgp_origin in valid_vrp_origins else 0
-            cnts = [1, vrp_covered, vrp_valid]
-            results.append( ((date, RIR, source), cnts))
+            vrp_cnts = [total, vrp_covered, vrp_valid]
+            
+            results.append( ((date, RIR, 'VRP'), vrp_cnts))
             
             for key in keys:
-                irr_origins = irrDict.get(key, set())
-                covered = 1 if len(origins) > 0 else 0
-                valid = 1 if bgp_origin in irr_origins else 0 
-                cnts = [1, covered, valid]
-                results.append( ((date, RIR, key), cnts))
+                irr_origins = irr_origin_dict.get(key, set())
+                
+                irr_covered = 1 if len(irr_origins) > 0 else 0
+                irr_valid = 1 if bgp_origin in irr_origins else 0 
+                irr_cnts = [total, irr_covered, irr_valid]
+                
+                results.append( ((date, RIR, key), irr_cnts))
 
     return results
 
 def addCount(valA, valB):
     return list(map(lambda x: x[0] + x[1], zip(valA, valB)))
 
-def build_dict(files, parse_func):
-    if len(files) == 0:
-        irr_dict = sc.broadcast({})
-    else:
-        irr_dict = sc.textFile(','.join(files))\
-                    .flatMap(lambda line: parse_func(line))\
-                    .groupByKey()\
-                    .map(lambda x: (x[0], make_binary_prefix_tree(x[1])))\
-                    .collectAsMap()
-        
-        irr_dict = sc.broadcast(irr_dict)
-
-    return irr_dict
+def toCSV(row):
+    key, value = row
+    date, rir, source = key
+    
+    data = [date, rir, source] + list(value)
+    return [",".join(list(map(str, data)))]
 
 def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     make_dirs(hdfs_dir, local_dir)
@@ -385,12 +378,14 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
 
         roa_dict = readNcollectAsMap(sc, target_roa_files, parseVRP)
 
+        irr_dict = sc.broadcast(irr_dict)
+        roa_dict = sc.broadcast(roa_dict)
+
         BGPRecords  = sc.textFile(','.join(target_bgp_files))\
                         .flatMap(lambda line: parseBGP(line))\
                         .groupByKey()
-        
-        bBatch = sc.broadcast(batch)
-        results = BGPRecords.flatMap(lambda row: getResults(row, roa_dict, irr_dict, bBatch))\
+        print(BGPRecords.count())
+        results = BGPRecords.flatMap(lambda row: getResults(row, roa_dict, irr_dict))\
                             .reduceByKey(addCount)\
                             .flatMap(toCSV)
 

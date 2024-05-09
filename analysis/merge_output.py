@@ -2,7 +2,6 @@ import os
 
 def get_infiles_and_latestdate(indir, outdir, target, intarget=None):
 	
-
 	infiles = os.listdir(indir)
 	if intarget != None:
 		infiles = list(filter(lambda x: x.startswith(intarget), infiles))
@@ -11,8 +10,10 @@ def get_infiles_and_latestdate(indir, outdir, target, intarget=None):
 	
 	currfiles = os.listdir(outdir)
 	currfiles = list(filter(lambda x: x.startswith(target), currfiles))
-
-	latestdate = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
+	if len(currfiles) > 0:
+		latestdate = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
+	else:
+		latestdate = '20110101'
 
 	infiles = list(filter(lambda x: x.split('.')[0].split('-')[-1] > latestdate, infiles))
 	return infiles, latestdate
@@ -143,15 +144,15 @@ def main():
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 	
 	target = 'bgp-coverage'
-	values = {'ALL-IRR':{}}
-	column_names = ['date','IRR(%)','IRR(#)']
+	values = {'ALL-IRR':{}, 'VRP':{}}
+	column_names = ['date','RPKI','IRR']
 	parse_func = parse_bgp_coverage
 	get_func = get_coverage_value
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 
 	target = 'bgp-valid'
-	values = {'ALL-IRR':{}}
-	column_names = ['date','IRR(%)','IRR(#)']
+	values = {'ALL-IRR':{}, 'VRP':{}}
+	column_names = ['date','RPKI','IRR']
 	parse_func = parse_bgp_valid
 	get_func = get_coverage_value
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
