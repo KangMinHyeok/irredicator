@@ -394,7 +394,7 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
                             .reduceByKey(addCount)\
                             .flatMap(toCSV)
 
-        filename = 'bgp-coverage-ipv4-{}'.format(end)
+        filename = 'bgp-coverage-ipv4-{}'.format(curr_end)
         write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
         sc.stop()
