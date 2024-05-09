@@ -27,7 +27,7 @@
 # downloda raw datasets
 0 1 * * * python3.8 /home/mhkang/rpki-irr/irredicator/dataset/get_routeviews.py >> /home/mhkang/rpki-irr/logs/get_routeviews.log 2>&1
 # reduce routeviews dataset for each vantage point
-# 0 6 * * * python3.8 /home/mhkang/rpki-irr/irredicator/preprocess/reduce_routeviews.py >> /home/mhkang/rpki-irr/logs/reduce_routeviews.log 2>&1
+0 6 * * * python3.8 /home/mhkang/rpki-irr/irredicator/preprocess/reduce_routeviews.py >> /home/mhkang/rpki-irr/logs/reduce_routeviews.log 2>&1
 # put reduced files on hdfs and reduce bgp update files for each day
 # put reduced files on hdfs
 0 10 * * * /home/mhkang/rpki-irr/irredicator/crontab/routeviews.sh

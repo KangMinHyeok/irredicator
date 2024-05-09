@@ -1,8 +1,13 @@
 import os
 
-def get_infiles_and_latestdate(indir, outdir, target):
+def get_infiles_and_latestdate(indir, outdir, target, intarget=None):
+	
+
 	infiles = os.listdir(indir)
-	infiles = list(filter(lambda x: x.startswith(target), infiles))
+	if intarget != None:
+		infiles = list(filter(lambda x: x.startswith(intarget), infiles))
+	else:
+		infiles = list(filter(lambda x: x.startswith(target), infiles))
 	
 	currfiles = os.listdir(outdir)
 	currfiles = list(filter(lambda x: x.startswith(target), currfiles))
@@ -45,6 +50,29 @@ def parse_inconsistent_bgp(line):
 		percentage = 0.0
 	return date, 'ALL-IRR', cnt, percentage
 
+
+def parse_bgp_coverage(line):
+	date, rir, source, total, covered, valid = line.split(',')[:6]
+	try:
+		cnt = int(covered)
+		percentage = float(covered) / float(total) * 100.0 if int(total) != 0 else 0.0
+	except:
+		print(line)
+		cnt = 0
+		percentage = 0.0
+	return date, source, cnt, percentage
+
+def parse_bgp_valid(line):
+	date, rir, source, total, covered, valid = line.split(',')[:6]
+	try:
+		cnt = int(valid)
+		percentage = float(valid) / float(covered) * 100.0 if int(covered) != 0 else 0.0
+	except:
+		print(line)
+		cnt = 0
+		percentage = 0.0
+	return date, source, cnt, percentage
+
 def get_coverage_value(values, date):
 	_, vrp_coverage = values['VRP'].get(date, (0, 0.0))
 	_, irr_coverage = values['ALL-IRR'].get(date, (0, 0.0))
@@ -76,11 +104,14 @@ def write_values(outdir, target, newlatestdate, dates, values, column_names, get
 			fout.write('{},{},{}\n'.format(date, *get_func(values, date)))
 
 
-def merge_output(indir, outdir, target, values, column_names, parse_func, get_func):
+def merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget=None):
 	print(target)
 
-	indir = indir + '{}/'.format(target)
-	infiles, latestdate = get_infiles_and_latestdate(indir, outdir, target)
+	if intarget != None:
+		indir = indir + '{}/'.format(intarget)
+	else:
+		indir = indir + '{}/'.format(target)
+	infiles, latestdate = get_infiles_and_latestdate(indir, outdir, target, intarget)
 
 	if len(infiles) <= 0:
 		return
@@ -111,6 +142,19 @@ def main():
 	get_func = get_coverage_value
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 	
+	target = 'bgp-coverage'
+	values = {'ALL-IRR':{}}
+	column_names = ['date','IRR(%)','IRR(#)']
+	parse_func = parse_bgp_coverage
+	get_func = get_coverage_value
+	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+
+	target = 'bgp-valid'
+	values = {'ALL-IRR':{}}
+	column_names = ['date','IRR(%)','IRR(#)']
+	parse_func = parse_bgp_valid
+	get_func = get_coverage_value
+	merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
 
 	target = 'inconsistent-prefix'
 	values = {'ALL-IRR':{}}
@@ -125,6 +169,8 @@ def main():
 	parse_func = parse_inconsistent_bgp
 	get_func = get_inconsistent_value
 	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+
+
 
 if __name__ == '__main__':
 	main()
