@@ -390,7 +390,7 @@ def bgp_coverage(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
                         .groupByKey()
         
         bBatch = sc.broadcast(batch)
-        results = BGPRecords.flatMap(lambda row: getResults(row, roaDict, irrDict, bBatch, filterTooSpecific=True, ip_version=ip_version))\
+        results = BGPRecords.flatMap(lambda row: getResults(row, roa_dict, irr_dict, bBatch, filterTooSpecific=True, ip_version=ip_version))\
                             .reduceByKey(addCount)\
                             .flatMap(toCSV)
 
