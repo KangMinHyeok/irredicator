@@ -192,7 +192,7 @@ def main():
 
 	for target, intarget in zip(targets, intargets):
 		values, column_names, parse_func, get_func = get_args(target)
-		merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
+		merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget=intarget)
 
 	# target = 'ip-coverage'
 	# values = {'ALL-IRR':{}, 'VRP':{}}
