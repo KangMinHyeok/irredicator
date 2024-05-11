@@ -1,6 +1,22 @@
 import os
 
-def get_infiles_and_latestdate(indir, outdir, target, intarget=None):
+def get_latestdate(outdir, targets, intargets):
+	latestdate = None
+	outfiles = os.listdir(outdir)
+	for target, intarget in zip(targets, intargets):
+		currfiles = list(filter(lambda x: x.startswith(target), outfiles))
+		if len(currfiles) > 0:
+			curr_latestdate = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
+		else:
+			curr_latestdate = '20110101'	
+		if latestdate is None:
+			latestdate = curr_latestdate
+		elif curr_latestdate < latestdate:
+			latestdate = curr_latestdate
+
+	return latestdate
+
+def get_infiles(indir, latestdate, target, intarget=None):
 	
 	infiles = os.listdir(indir)
 	if intarget != None:
@@ -8,15 +24,8 @@ def get_infiles_and_latestdate(indir, outdir, target, intarget=None):
 	else:
 		infiles = list(filter(lambda x: x.startswith(target), infiles))
 	
-	currfiles = os.listdir(outdir)
-	currfiles = list(filter(lambda x: x.startswith(target), currfiles))
-	if len(currfiles) > 0:
-		latestdate = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
-	else:
-		latestdate = '20110101'
-
 	infiles = list(filter(lambda x: x.split('.')[0].split('-')[-1] > latestdate, infiles))
-	return infiles, latestdate
+	return infiles
 
 def parse_coverage(line):
 	date, source, cnt, total = line.split(',')[:4]
@@ -105,15 +114,15 @@ def write_values(outdir, target, newlatestdate, dates, values, column_names, get
 			fout.write('{},{},{}\n'.format(date, *get_func(values, date)))
 
 
-def merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget=None):
+def merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget=None):
 	print(target)
 
 	if intarget != None:
 		indir = indir + '{}/'.format(intarget)
 	else:
 		indir = indir + '{}/'.format(target)
-	infiles, latestdate = get_infiles_and_latestdate(indir, outdir, target, intarget)
-
+	
+	infiles = get_infiles(indir, latestdate, target, intarget=intarget)
 	if len(infiles) <= 0:
 		return
 
@@ -129,47 +138,99 @@ def main():
 	indir = '/home/mhkang/rpki-irr/outputs/analysis/'
 	outdir = '/net/data/irrs/webdata/latest/'
 
-	target = 'ip-coverage'
-	values = {'ALL-IRR':{}, 'VRP':{}}
-	column_names = ['date','RPKI','IRR']
-	parse_func = parse_coverage
-	get_func = get_coverage_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	targets = [
+		'ip-coverage', 'as-coverage',
+		'bgp-coverage', 'bgp-valid',
+		'inconsistent-prefix', 'inconsistent-bgp'
+		]
+	intargets = [
+		None, None,
+		None, 'bgp-coverage',
+		None, None
+	]	
+
+	latestdate = get_latestdate(outdir, targets, intargets)
 	
-	target = 'as-coverage'
-	values = {'ALL-IRR':{}, 'VRP':{}}
-	column_names = ['date','RPKI','IRR']
-	parse_func = parse_coverage
-	get_func = get_coverage_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	def get_args(target):
+		values, column_names, parse_func, get_func = None, None, None, None
+		if target == 'ip-coverage':
+			values = {'ALL-IRR':{}}
+			column_names = ['date','IRR(%)','IRR(#)']
+			parse_func = parse_coverage
+			get_func = get_coverage_value
+		elif target == 'as-coverage':
+			values = {'ALL-IRR':{}, 'VRP':{}}
+			column_names = ['date','RPKI','IRR']
+			parse_func = parse_coverage
+			get_func = get_coverage_value
+		elif target == 'bgp-coverage':
+			values = {'ALL-IRR':{}, 'VRP':{}}
+			column_names = ['date','RPKI','IRR']
+			parse_func = parse_bgp_coverage
+			get_func = get_coverage_value
+		elif target = 'bgp-valid':
+			values = {'ALL-IRR':{}, 'VRP':{}}
+			column_names = ['date','RPKI','IRR']
+			parse_func = parse_bgp_valid
+			get_func = get_coverage_value
+		elif target = 'inconsistent-prefix':
+			values = {'ALL-IRR':{}}
+			column_names = ['date','IRR(%)','IRR(#)']
+			parse_func = parse_inconsistent_prefix
+			get_func = get_inconsistent_value
+		elif target = 'inconsistent-bgp':
+			values = {'ALL-IRR':{}}
+			column_names = ['date','IRR(%)','IRR(#)']
+			parse_func = parse_inconsistent_bgp
+			get_func = get_inconsistent_value
+
+		return values, column_names, parse_func, get_func
+
+	for target, intarget in zip(targets, intargets):
+		values, column_names, parse_func, get_func = get_args(target)
+		merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
+
+	# target = 'ip-coverage'
+	# values = {'ALL-IRR':{}, 'VRP':{}}
+	# column_names = ['date','RPKI','IRR']
+	# parse_func = parse_coverage
+	# get_func = get_coverage_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 	
-	target = 'bgp-coverage'
-	values = {'ALL-IRR':{}, 'VRP':{}}
-	column_names = ['date','RPKI','IRR']
-	parse_func = parse_bgp_coverage
-	get_func = get_coverage_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	# target = 'as-coverage'
+	# values = {'ALL-IRR':{}, 'VRP':{}}
+	# column_names = ['date','RPKI','IRR']
+	# parse_func = parse_coverage
+	# get_func = get_coverage_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	
+	# target = 'bgp-coverage'
+	# values = {'ALL-IRR':{}, 'VRP':{}}
+	# column_names = ['date','RPKI','IRR']
+	# parse_func = parse_bgp_coverage
+	# get_func = get_coverage_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 
-	target = 'bgp-valid'
-	values = {'ALL-IRR':{}, 'VRP':{}}
-	column_names = ['date','RPKI','IRR']
-	parse_func = parse_bgp_valid
-	get_func = get_coverage_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
+	# target = 'bgp-valid'
+	# values = {'ALL-IRR':{}, 'VRP':{}}
+	# column_names = ['date','RPKI','IRR']
+	# parse_func = parse_bgp_valid
+	# get_func = get_coverage_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
 
-	target = 'inconsistent-prefix'
-	values = {'ALL-IRR':{}}
-	column_names = ['date','IRR(%)','IRR(#)']
-	parse_func = parse_inconsistent_prefix
-	get_func = get_inconsistent_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	# target = 'inconsistent-prefix'
+	# values = {'ALL-IRR':{}}
+	# column_names = ['date','IRR(%)','IRR(#)']
+	# parse_func = parse_inconsistent_prefix
+	# get_func = get_inconsistent_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 
-	target = 'inconsistent-bgp'
-	values = {'ALL-IRR':{}}
-	column_names = ['date','IRR(%)','IRR(#)']
-	parse_func = parse_inconsistent_bgp
-	get_func = get_inconsistent_value
-	merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+	# target = 'inconsistent-bgp'
+	# values = {'ALL-IRR':{}}
+	# column_names = ['date','IRR(%)','IRR(#)']
+	# parse_func = parse_inconsistent_bgp
+	# get_func = get_inconsistent_value
+	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
 
 if __name__ == '__main__':
 	main()
