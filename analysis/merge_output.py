@@ -150,7 +150,7 @@ def main():
 	]	
 
 	latestdate = get_latestdate(outdir, targets, intargets)
-	
+
 	def get_args(target):
 		values, column_names, parse_func, get_func = None, None, None, None
 		if target == 'ip-coverage':
@@ -168,17 +168,17 @@ def main():
 			column_names = ['date','RPKI','IRR']
 			parse_func = parse_bgp_coverage
 			get_func = get_coverage_value
-		elif target = 'bgp-valid':
+		elif target == 'bgp-valid':
 			values = {'ALL-IRR':{}, 'VRP':{}}
 			column_names = ['date','RPKI','IRR']
 			parse_func = parse_bgp_valid
 			get_func = get_coverage_value
-		elif target = 'inconsistent-prefix':
+		elif target == 'inconsistent-prefix':
 			values = {'ALL-IRR':{}}
 			column_names = ['date','IRR(%)','IRR(#)']
 			parse_func = parse_inconsistent_prefix
 			get_func = get_inconsistent_value
-		elif target = 'inconsistent-bgp':
+		elif target == 'inconsistent-bgp':
 			values = {'ALL-IRR':{}}
 			column_names = ['date','IRR(%)','IRR(#)']
 			parse_func = parse_inconsistent_bgp
