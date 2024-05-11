@@ -35,9 +35,8 @@ def parse_coverage(line):
 	except Exception as e:
 		print(e)
 		print(line)
-		raise Exception(e)
-		# cnt = 0
-		# percentage = 0.0
+		cnt = 0
+		percentage = 0.0
 	return date, source, cnt, percentage
 
 def parse_inconsistent_prefix(line):
@@ -56,9 +55,10 @@ def parse_inconsistent_bgp(line):
 	try:
 		cnt = int(inconsistent)
 		percentage = float(inconsistent) / float(covered) * 100.0 if int(covered) != 0 else 0.0
-	except:
+	except Exception as e:
+		print(e)
 		print(line)
-		cnt =  0
+		cnt = 0
 		percentage = 0.0
 	return date, 'ALL-IRR', cnt, percentage
 
@@ -71,9 +71,8 @@ def parse_bgp_coverage(line):
 	except Exception as e:
 		print(e)
 		print(line)
-		raise Exception(e)
-		# cnt = 0
-		# percentage = 0.0
+		cnt = 0
+		percentage = 0.0
 	return date, source, cnt, percentage
 
 def parse_bgp_valid(line):
