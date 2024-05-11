@@ -16,11 +16,11 @@ def get_latestdate(outdir, targets, intargets):
 
 	return latestdate
 
-def get_newlatestdate(indir, targets, intargets):
+def get_newlatestdate(indirs, targets, intargets):
 	latestdate = None
-	infiles = os.listdir(indir)
-	for target, intarget in zip(targets, intargets):
-		
+	
+	for indir, target, intarget in zip(indirs, targets, intargets):
+		infiles = os.listdir(indir)
 		if intarget != None:
 			curr_infiles = list(filter(lambda x: x.startswith(intarget), infiles))
 		else:
@@ -172,8 +172,14 @@ def main():
 		None, None
 	]	
 
+	if intarget != None:
+		indir = indir + '{}/'.format(intarget)
+	else:
+		indir = indir + '{}/'.format(target)
+
+	indirs = list(map(lambda x: indir + '{}/'.format(x[0] if x[1] is None else x[1]), zip(targets, intargets)))
 	latestdate = get_latestdate(outdir, targets, intargets)
-	newlatestdate = get_newlatestdate(indir, targets, intargets)
+	newlatestdate = get_newlatestdate(indirs, targets, intargets)
 
 	def get_args(target):
 		values, column_names, parse_func, get_func = None, None, None, None
