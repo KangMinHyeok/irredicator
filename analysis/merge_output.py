@@ -172,11 +172,6 @@ def main():
 		None, None
 	]	
 
-	if intarget != None:
-		indir = indir + '{}/'.format(intarget)
-	else:
-		indir = indir + '{}/'.format(target)
-
 	indirs = list(map(lambda x: indir + '{}/'.format(x[0] if x[1] is None else x[1]), zip(targets, intargets)))
 	latestdate = get_latestdate(outdir, targets, intargets)
 	newlatestdate = get_newlatestdate(indirs, targets, intargets)
