@@ -16,6 +16,27 @@ def get_latestdate(outdir, targets, intargets):
 
 	return latestdate
 
+def get_newlatestdate(indir, targets, intargets):
+	latestdate = None
+	infiles = os.listdir(indir)
+	for target, intarget in zip(targets, intargets):
+		
+		if intarget != None:
+			curr_infiles = list(filter(lambda x: x.startswith(intarget), infiles))
+		else:
+			curr_infiles = list(filter(lambda x: x.startswith(target), infiles))
+		curr_dates = list(map(lambda x: x.split('.')[0].split('-')[-1] , curr_infiles))
+		curr_dates = list(filter(lambda x: x > latestdate, curr_dates))
+		curr_latestdate = max(curr_dates)
+		
+		if latestdate is None:
+			latestdate = curr_latestdate
+		elif curr_latestdate < latestdate:
+			latestdate = curr_latestdate
+
+	return latestdate
+
+
 def get_infiles(indir, latestdate, target, intarget=None):
 	
 	infiles = os.listdir(indir)
@@ -95,19 +116,18 @@ def get_inconsistent_value(values, date):
 	cnt, percentage = values['ALL-IRR'].get(date, (0, 0.0))
 	return percentage, cnt
 
-def load_values(indir, infiles, values, parse_func, latestdate):
-	newlatestdate = latestdate
+def load_values(indir, infiles, values, parse_func, latestdate, newlatestdate):
 	dates = set()
 	for infile in infiles:
 		with open(indir + infile, 'r') as fin:
 			for line in fin:
 				date, source, cnt, percentage = parse_func(line)
 				if date <= latestdate: continue
+				if date >= newlatestdate: continue
 				if source in values:
 					dates.add(date)
 					values[source][date] = (cnt, percentage)
-					if date > newlatestdate: newlatestdate = date
-	return newlatestdate, sorted(list(dates))
+	return sorted(list(dates))
 
 def write_values(outdir, target, newlatestdate, dates, values, column_names, get_func):
 	with open(outdir + '{}_{}.csv'.format(target, newlatestdate), 'w') as fout:
@@ -117,7 +137,7 @@ def write_values(outdir, target, newlatestdate, dates, values, column_names, get
 			fout.write('{},{},{}\n'.format(date, *get_func(values, date)))
 
 
-def merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget=None):
+def merge_output(indir, outdir, latestdate, newlatestdate, target, values, column_names, parse_func, get_func, intarget=None):
 	print(target)
 
 	if intarget != None:
@@ -131,7 +151,7 @@ def merge_output(indir, outdir, latestdate, target, values, column_names, parse_
 
 	# print(infiles)
 
-	newlatestdate, dates = load_values(indir, infiles, values, parse_func, latestdate)
+	dates = load_values(indir, infiles, values, parse_func, latestdate, newlatestdate)
 
 	# print(values)
 	write_values(outdir, target, newlatestdate, dates, values, column_names, get_func)
@@ -153,6 +173,7 @@ def main():
 	]	
 
 	latestdate = get_latestdate(outdir, targets, intargets)
+	newlatestdate = get_newlatestdate(indir, targets, intargets)
 
 	def get_args(target):
 		values, column_names, parse_func, get_func = None, None, None, None
@@ -191,7 +212,7 @@ def main():
 
 	for target, intarget in zip(targets, intargets):
 		values, column_names, parse_func, get_func = get_args(target)
-		merge_output(indir, outdir, latestdate, target, values, column_names, parse_func, get_func, intarget=intarget)
+		merge_output(indir, outdir, latestdate, newlatestdate, target, values, column_names, parse_func, get_func, intarget=intarget)
 
 	# target = 'ip-coverage'
 	# values = {'ALL-IRR':{}, 'VRP':{}}
