@@ -32,10 +32,12 @@ def parse_coverage(line):
 	try:
 		cnt = int(cnt)
 		percentage = float(cnt) / float(total) * 100.0 if int(total) != 0 else 0.0
-	except:
+	except Exception as e:
+		print(e)
 		print(line)
-		cnt = 0
-		percentage = 0.0
+		raise Exception(e)
+		# cnt = 0
+		# percentage = 0.0
 	return date, source, cnt, percentage
 
 def parse_inconsistent_prefix(line):
@@ -66,10 +68,12 @@ def parse_bgp_coverage(line):
 	try:
 		cnt = int(covered)
 		percentage = float(covered) / float(total) * 100.0 if int(total) != 0 else 0.0
-	except:
+	except Exception as e:
+		print(e)
 		print(line)
-		cnt = 0
-		percentage = 0.0
+		raise Exception(e)
+		# cnt = 0
+		# percentage = 0.0
 	return date, source, cnt, percentage
 
 def parse_bgp_valid(line):
@@ -126,11 +130,11 @@ def merge_output(indir, outdir, latestdate, target, values, column_names, parse_
 	if len(infiles) <= 0:
 		return
 
-	print(infiles)
+	# print(infiles)
 
 	newlatestdate, dates = load_values(indir, infiles, values, parse_func, latestdate)
 
-	print(values)
+	# print(values)
 	write_values(outdir, target, newlatestdate, dates, values, column_names, get_func)
 	
 
@@ -154,8 +158,8 @@ def main():
 	def get_args(target):
 		values, column_names, parse_func, get_func = None, None, None, None
 		if target == 'ip-coverage':
-			values = {'ALL-IRR':{}}
-			column_names = ['date','IRR(%)','IRR(#)']
+			values = {'ALL-IRR':{}, 'VRP':{}}
+			column_names = ['date','RPKI','IRR']
 			parse_func = parse_coverage
 			get_func = get_coverage_value
 		elif target == 'as-coverage':
