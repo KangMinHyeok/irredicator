@@ -1,23 +1,23 @@
 import os
 
-def get_latestdate(outdir, targets, intargets):
-	latestdate = None
+def get_start_date(outdir, targets, intargets):
+	start_date = None
 	outfiles = os.listdir(outdir)
 	for target, intarget in zip(targets, intargets):
 		currfiles = list(filter(lambda x: x.startswith(target), outfiles))
 		if len(currfiles) > 0:
-			curr_latestdate = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
+			curr_date = max(list(map(lambda x: x.split('.')[0].split('_')[-1], currfiles)))
 		else:
-			curr_latestdate = '20110101'	
-		if latestdate is None:
-			latestdate = curr_latestdate
-		elif curr_latestdate < latestdate:
-			latestdate = curr_latestdate
+			curr_date = '20110101'	
+		if start_date is None:
+			start_date = curr_date
+		elif curr_date < start_date:
+			start_date = curr_date
 
-	return latestdate
+	return start_date
 
-def get_newlatestdate(indirs, targets, intargets, latestdate):
-	
+def get_end_date(indirs, targets, intargets, start_date):
+	end_date = None
 	for indir, target, intarget in zip(indirs, targets, intargets):
 		infiles = os.listdir(indir)
 		if intarget != None:
@@ -25,27 +25,15 @@ def get_newlatestdate(indirs, targets, intargets, latestdate):
 		else:
 			curr_infiles = list(filter(lambda x: x.startswith(target), infiles))
 		curr_dates = list(map(lambda x: x.split('.')[0].split('-')[-1] , curr_infiles))
-		curr_dates = list(filter(lambda x: x > latestdate, curr_dates))
-		curr_latestdate = max(curr_dates)
+		curr_dates = list(filter(lambda x: x > start_date, curr_dates))
+		curr_date = max(curr_dates)
 		
-		if latestdate is None:
-			latestdate = curr_latestdate
-		elif curr_latestdate < latestdate:
-			latestdate = curr_latestdate
+		if end_date is None:
+			end_date = curr_date
+		elif curr_date < end_date:
+			end_date = curr_date
 
-	return latestdate
-
-
-def get_infiles(indir, latestdate, target, intarget=None):
-	
-	infiles = os.listdir(indir)
-	if intarget != None:
-		infiles = list(filter(lambda x: x.startswith(intarget), infiles))
-	else:
-		infiles = list(filter(lambda x: x.startswith(target), infiles))
-	
-	infiles = list(filter(lambda x: x.split('.')[0].split('-')[-1] > latestdate, infiles))
-	return infiles
+	return end_date
 
 def parse_coverage(line):
 	date, source, cnt, total = line.split(',')[:4]
@@ -115,28 +103,40 @@ def get_inconsistent_value(values, date):
 	cnt, percentage = values['ALL-IRR'].get(date, (0, 0.0))
 	return percentage, cnt
 
-def load_values(indir, infiles, values, parse_func, latestdate, newlatestdate):
+
+def get_infiles(indir, start_date, target, intarget=None):
+	
+	infiles = os.listdir(indir)
+	if intarget != None:
+		infiles = list(filter(lambda x: x.startswith(intarget), infiles))
+	else:
+		infiles = list(filter(lambda x: x.startswith(target), infiles))
+	
+	infiles = list(filter(lambda x: x.split('.')[0].split('-')[-1] > start_date, infiles))
+	return infiles
+
+def load_values(indir, infiles, values, parse_func, start_date, end_date):
 	dates = set()
 	for infile in infiles:
 		with open(indir + infile, 'r') as fin:
 			for line in fin:
 				date, source, cnt, percentage = parse_func(line)
-				if date <= latestdate: continue
-				if date >= newlatestdate: continue
+				if date <= start_date: continue
+				if date > end_date: continue
 				if source in values:
 					dates.add(date)
 					values[source][date] = (cnt, percentage)
 	return sorted(list(dates))
 
-def write_values(outdir, target, newlatestdate, dates, values, column_names, get_func):
-	with open(outdir + '{}_{}.csv'.format(target, newlatestdate), 'w') as fout:
+def write_values(outdir, target, end_date, dates, values, column_names, get_func):
+	with open(outdir + '{}_{}.csv'.format(target, end_date), 'w') as fout:
 		fout.write(','.join(column_names) + '\n')
 		for date in dates:
 
 			fout.write('{},{},{}\n'.format(date, *get_func(values, date)))
 
 
-def merge_output(indir, outdir, latestdate, newlatestdate, target, values, column_names, parse_func, get_func, intarget=None):
+def merge_output(indir, outdir, start_date, end_date, target, values, column_names, parse_func, get_func, intarget=None):
 	print(target)
 
 	if intarget != None:
@@ -144,17 +144,49 @@ def merge_output(indir, outdir, latestdate, newlatestdate, target, values, colum
 	else:
 		indir = indir + '{}/'.format(target)
 	
-	infiles = get_infiles(indir, latestdate, target, intarget=intarget)
+	infiles = get_infiles(indir, start_date, target, intarget=intarget)
 	if len(infiles) <= 0:
 		return
 
-	# print(infiles)
-
-	dates = load_values(indir, infiles, values, parse_func, latestdate, newlatestdate)
+	dates = load_values(indir, infiles, values, parse_func, start_date, end_date)
 
 	# print(values)
-	write_values(outdir, target, newlatestdate, dates, values, column_names, get_func)
-	
+	write_values('./out/', target, end_date, dates, values, column_names, get_func)
+
+def get_args(target):
+	values, column_names, parse_func, get_func = None, None, None, None
+	if target == 'ip-coverage':
+		values = {'ALL-IRR':{}, 'VRP':{}}
+		column_names = ['date','RPKI','IRR']
+		parse_func = parse_coverage
+		get_func = get_coverage_value
+	elif target == 'as-coverage':
+		values = {'ALL-IRR':{}, 'VRP':{}}
+		column_names = ['date','RPKI','IRR']
+		parse_func = parse_coverage
+		get_func = get_coverage_value
+	elif target == 'bgp-coverage':
+		values = {'ALL-IRR':{}, 'VRP':{}}
+		column_names = ['date','RPKI','IRR']
+		parse_func = parse_bgp_coverage
+		get_func = get_coverage_value
+	elif target == 'bgp-valid':
+		values = {'ALL-IRR':{}, 'VRP':{}}
+		column_names = ['date','RPKI','IRR']
+		parse_func = parse_bgp_valid
+		get_func = get_coverage_value
+	elif target == 'inconsistent-prefix':
+		values = {'ALL-IRR':{}}
+		column_names = ['date','IRR(%)','IRR(#)']
+		parse_func = parse_inconsistent_prefix
+		get_func = get_inconsistent_value
+	elif target == 'inconsistent-bgp':
+		values = {'ALL-IRR':{}}
+		column_names = ['date','IRR(%)','IRR(#)']
+		parse_func = parse_inconsistent_bgp
+		get_func = get_inconsistent_value
+
+	return values, column_names, parse_func, get_func	
 
 def main():
 	indir = '/home/mhkang/rpki-irr/outputs/analysis/'
@@ -172,89 +204,14 @@ def main():
 	]	
 
 	indirs = list(map(lambda x: indir + '{}/'.format(x[0] if x[1] is None else x[1]), zip(targets, intargets)))
-	latestdate = get_latestdate(outdir, targets, intargets)
-	newlatestdate = get_newlatestdate(indirs, targets, intargets, latestdate)
+	start_date = get_start_date(outdir, targets, intargets)
+	end_date = get_end_date(indirs, targets, intargets, start_date)
 
-	def get_args(target):
-		values, column_names, parse_func, get_func = None, None, None, None
-		if target == 'ip-coverage':
-			values = {'ALL-IRR':{}, 'VRP':{}}
-			column_names = ['date','RPKI','IRR']
-			parse_func = parse_coverage
-			get_func = get_coverage_value
-		elif target == 'as-coverage':
-			values = {'ALL-IRR':{}, 'VRP':{}}
-			column_names = ['date','RPKI','IRR']
-			parse_func = parse_coverage
-			get_func = get_coverage_value
-		elif target == 'bgp-coverage':
-			values = {'ALL-IRR':{}, 'VRP':{}}
-			column_names = ['date','RPKI','IRR']
-			parse_func = parse_bgp_coverage
-			get_func = get_coverage_value
-		elif target == 'bgp-valid':
-			values = {'ALL-IRR':{}, 'VRP':{}}
-			column_names = ['date','RPKI','IRR']
-			parse_func = parse_bgp_valid
-			get_func = get_coverage_value
-		elif target == 'inconsistent-prefix':
-			values = {'ALL-IRR':{}}
-			column_names = ['date','IRR(%)','IRR(#)']
-			parse_func = parse_inconsistent_prefix
-			get_func = get_inconsistent_value
-		elif target == 'inconsistent-bgp':
-			values = {'ALL-IRR':{}}
-			column_names = ['date','IRR(%)','IRR(#)']
-			parse_func = parse_inconsistent_bgp
-			get_func = get_inconsistent_value
-
-		return values, column_names, parse_func, get_func
+	print(start_date, end_date)
 
 	for target, intarget in zip(targets, intargets):
 		values, column_names, parse_func, get_func = get_args(target)
-		merge_output(indir, outdir, latestdate, newlatestdate, target, values, column_names, parse_func, get_func, intarget=intarget)
-
-	# target = 'ip-coverage'
-	# values = {'ALL-IRR':{}, 'VRP':{}}
-	# column_names = ['date','RPKI','IRR']
-	# parse_func = parse_coverage
-	# get_func = get_coverage_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
-	
-	# target = 'as-coverage'
-	# values = {'ALL-IRR':{}, 'VRP':{}}
-	# column_names = ['date','RPKI','IRR']
-	# parse_func = parse_coverage
-	# get_func = get_coverage_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
-	
-	# target = 'bgp-coverage'
-	# values = {'ALL-IRR':{}, 'VRP':{}}
-	# column_names = ['date','RPKI','IRR']
-	# parse_func = parse_bgp_coverage
-	# get_func = get_coverage_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
-
-	# target = 'bgp-valid'
-	# values = {'ALL-IRR':{}, 'VRP':{}}
-	# column_names = ['date','RPKI','IRR']
-	# parse_func = parse_bgp_valid
-	# get_func = get_coverage_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func, intarget='bgp-coverage')
-
-	# target = 'inconsistent-prefix'
-	# values = {'ALL-IRR':{}}
-	# column_names = ['date','IRR(%)','IRR(#)']
-	# parse_func = parse_inconsistent_prefix
-	# get_func = get_inconsistent_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
-
-	# target = 'inconsistent-bgp'
-	# values = {'ALL-IRR':{}}
-	# column_names = ['date','IRR(%)','IRR(#)']
-	# parse_func = parse_inconsistent_bgp
-	# get_func = get_inconsistent_value
-	# merge_output(indir, outdir, target, values, column_names, parse_func, get_func)
+		merge_output(indir, outdir, start_date, end_date, target, values, column_names, parse_func, get_func, intarget=intarget)
 
 if __name__ == '__main__':
 	main()
