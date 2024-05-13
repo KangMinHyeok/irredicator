@@ -208,7 +208,7 @@ def analyze_inconsistent_prefix(irr_dir, roa_dir, hdfs_dir, local_dir):
     print("target dates: {} ~ {}".format(start, end))
     target_dates = sorted(list(filter(lambda x: start < x <= end, list(set(irr_dates).union(set(roa_dates))))))
 
-    batch_size = 7
+    batch_size = 3
     batches = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
     print(batches)
     for batch in batches:

@@ -304,7 +304,7 @@ def count_discrepancy(bgp_dir, irr_dir,  roa_dir, hdfs_dir, local_dir):
     entryResults = None
     overlapResults = None
 
-    batch_size = 5
+    batch_size = 3
     batch = [target_dates[i:i + batch_size] for i in range(0, len(target_dates), batch_size)]
     
     for dates in batch:
