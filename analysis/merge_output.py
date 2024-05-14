@@ -3,6 +3,7 @@ import os
 def get_start_date(outdir, targets, intargets):
 	start_date = None
 	outfiles = os.listdir(outdir)
+	outfiles += os.listdir(outdir.replace('latest', 'archive'))
 	for target, intarget in zip(targets, intargets):
 		currfiles = list(filter(lambda x: x.startswith(target), outfiles))
 		if len(currfiles) > 0:
@@ -151,7 +152,7 @@ def merge_output(indir, outdir, start_date, end_date, target, values, column_nam
 	dates = load_values(indir, infiles, values, parse_func, start_date, end_date)
 
 	# print(values)
-	write_values('./out/', target, end_date, dates, values, column_names, get_func)
+	write_values(outdir, target, end_date, dates, values, column_names, get_func)
 
 def get_args(target):
 	values, column_names, parse_func, get_func = None, None, None, None
