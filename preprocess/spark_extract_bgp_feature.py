@@ -12,23 +12,197 @@ from datetime import *
 from pyspark.sql import SparkSession
 from pyspark import SparkContext, SparkConf
 
-
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
+from utils.utils import write_result, ip2binary, get_date, get_dates, get_files, make_dirs
 
 from caida import as2rel
 from utils.utils import *
 from utils.prefix import *
-from utils.bitvector import *
+
+def make_bit_vector(bit_size):
+    fill = 0
+    num_records = bit_size >> 5                   # number of 8 bit integers
+    if (bit_size & 31):                      # if bitSize != (32 * n) add
+        num_records += 1                        #    a record for stragglers
+
+    bitArray = [0] * num_records
+    return bitArray
+
+def shift_bit_vector(bitvector, delay, bit_size=32, bitval=0):
+    new_vector = make_bit_vector(bit_size)
+    for i in range(bit_size):
+        if bitval == 1 and i < delay: set_bit(new_vector, i)
+        if i + delay > bit_size: break
+        if testBit(bitvector, i): set_bit(new_vector, i + delay)
+    return new_vector
 
 
-def parseBGPReduced(line, ip_version='ipv4'):
-    date, prefix, origin = line.split('|')
-    prefix_addr, prefix_len = prefix.split('/')
+# testBit() returns a nonzero result, 2**offset, if the bit at 'bit_num' is set to 1.
+def test_bit(bitvector, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = 1 << offset
+    return(bitvector[record] & mask)
+
+# setBit() returns an integer with the bit at 'bit_num' set to 1.
+def set_bit(bitvector, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = 1 << offset
+    bitvector[record] |= mask
+    return(bitvector[record])
+
+# clearBit() returns an integer with the bit at 'bit_num' cleared.
+def clear_bit(bitvector, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = ~(1 << offset)
+    bitvector[record] &= mask
+    return(bitvector[record])
+
+# toggleBit() returns an integer with the bit at 'bit_num' inverted, 0 -> 1 and 1 -> 0.
+def toggle_bit(bitvector, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = 1 << offset
+    bitvector[record] ^= mask
+    return(bitvector[record])
+
+def print_bit(bitvector):
+    for record in bitvector:
+        for offset in range(32):
+            mask = 1 << offset
+            if record & mask:
+                sys.stdout.write('1')
+            else:
+                sys.stdout.write('0')
+    sys.stdout.write('\n')
+
+def bitvector2str(bitvector, size=32):
+    bstring = ''
+    for record in bitvector:
+        for offset in range(32):
+            mask = 1 << offset
+            if record & mask:
+                bstring = '1' + bstring
+            else:
+                bstring = '0' + bstring
+
+    return bstring[32-size:]
+
+def tobitvector(bstring):
+    bitvector = []
+
+    bitvectors = [bstring[i:i + 32] for i in range(0, len(bstring), 32)]
+    return list(map(lambda x: int(x, 2), bitvectors))
+
+
+def make_binary_prefix_tree(records):
+    tree = {}
+    record_set = {}
+    for record in records:
+        prefix_addr, prefix_len = record[:2]
+        binary_prefix = ip2binary(prefix_addr, prefix_len)
+
+        insert(tree, record_set, binary_prefix, record)
+        
+        
+    return tree, record_set
+
+def insert(tree, record_set, binary_prefix, record):
+
+    if binary_prefix not in record_set:
+        record_set[binary_prefix] = set()
+    
+    record_set[binary_prefix].add(tuple(record))
+    insert2tree(tree, binary_prefix)
+
+def insert2tree(tree, binary_prefix):
+    if len(binary_prefix) == 0:
+        return
+    
+    subtree = tree
+    for i in range(len(binary_prefix)):
+        if binary_prefix[i] not in subtree:
+            subtree[binary_prefix[i]] = {}
+
+        subtree = subtree[binary_prefix[i]]
+
+        if i == len(binary_prefix)-1:
+            subtree['l']=True
+
+def get_covered(tree, binary_prefix):
+    covered=[]
+    subtree = tree
+    subp=""
+    for t in binary_prefix:
+        if t not in subtree:
+            break
+        subtree = subtree[t]
+        subp = subp + t
+        if 'l' in subtree:
+            covered.append(subp)
+
+    return sorted(covered, key=lambda x: len(x))
+
+def get_records(tree, record_set, binary_prefix):
+    
+    binary_prefixes = get_covered(tree, binary_prefix)
+    
+    records = []
+
+    if len(binary_prefixes) == 0:
+        return records
+
+    for binary_prefix in binary_prefixes:
+        records += record_set.get(binary_prefix, [])
+    
+    return records
+
+
+def parseBitVector(line, ip_version='ipv4'):
+    date, prefix_addr, prefix_len, origin, bitvector = line.split('\t')
+    
+    results = []
+    results.append( ((prefix_addr, prefix_len, origin), (date, bitvector)) )
+    return results
+
+
+def parseIRR(line, ip_version='ipv4'):
+    date, rir, prefix, origin, isp, country, source, changed = line.split("\t")
+
+    if ip_version == 'ipv4' and ':' in prefix: return []
+    elif ip_version == 'ipv6' and '.' in prefix: return []
+
+    try: 
+        source = source.upper()
+        origin = int(origin)        
+        prefix_addr, prefix_len = prefix.split('/')
+        prefix_len = int(prefix_len)
+    except: return []
 
     results = []
-    results.append( ((prefix_addr, prefix_len), (date, origin)) )
+    results.append( ((date, source, prefix_addr, prefix_len), (origin, isp, country, rir)) )
+            
     return results
+
+
+def parseVRP(line, ip_version='ipv4'):
+    if line.startswith('#'): return []
+    tokens = line.split('\t')
+    date, prefix_addr, prefix_len, max_len, origin, num_ip, cc, rir, isp  = tokens[:9]
+    if ip_version == 'ipv4' and ':' in prefix_addr: return []
+    elif ip_version == 'ipv6' and '.' in prefix_addr: return []
+
+    try: 
+        origin = int(origin)
+        prefix_len = int(prefix_len)
+        max_len = int(max_len) if max_len != None and max_len != "None" else prefix_len
+
+    except Exception as e:  
+        return []
+    
+    return [ (date, (prefix_addr, prefix_len, max_len, origin, isp, cc, rir)) ]
 
 
 def getRelFunc(row, vrpDict, relDict):
@@ -66,10 +240,12 @@ def getRelFunc(row, vrpDict, relDict):
         results.append((new_key, (isp, rir, validation, sumRels(rels), source) ))
     return results
 
-def calcMetrics(dates):
+def calcMetrics(bitvector, size):
     monWnds = [1,3,5,7,14,21,30,30*3, 30*6, 30*9, 365, 365*2,365*3, 365*4, 365*5, 365*6, 365*7, 365*8, 365*9, 365*10]
 
-    prev = (testBit(dates, 0) > 0)
+    monWnds = list(filter(lambda x: x < size, monWnds))
+
+    prev = (test_bit(bitvector, 0) > 0)
     
     monWnds = sorted(monWnds, reverse=True)
     windows = {}
@@ -88,9 +264,9 @@ def calcMetrics(dates):
 
     offline, online = 0, 0 
 
-    for i in range(3650):
+    for i in range(365):
 
-        curr = (testBit(dates, i) > 0)
+        curr = (test_bit(bitvector, i) > 0)
         if curr:
             for monWnd in monWnds:
                 if i < monWnd:
@@ -160,31 +336,35 @@ def calcMetrics(dates):
 def getStats(values):
     return [np.min(values), np.max(values), np.mean(values), np.std(values)]
 
-def toBitVector(row, date):
+def toBitVector(row, target):
     key, value = row
 
-    prefix_addr, prefix_len = key
-    bgps = value
+    prefix_addr, prefix_len, origin = key
+    bitvectors = value
 
-    originDict = {}
+    if bitvectors == None: bitvectors = []
     
-    if bgps == None: 
-        # print("BGPs is None")
-        bgps = []
+    bitvectorDict = {}
+    for date, bitvector in bitvectors:
+        bitvectorDict[date] = bitvector
 
-    for _date, origin, _total_cnt in sorted(list(bgps), key=lambda x: x[0]):
-        diff = dateDiff(_date, date)
-        if diff < 0 or diff >= 3650: continue
-        if origin not in originDict:
-            originDict[origin] = makeBitVector(7)
-        
-        setBit(originDict[origin], diff)
+
+    year, month = int(target[:4]), int(target[4:6])
+    bitvector = ''
+    for i in range(12):
+        curr_bitvector = bitvectorDict.get('{}{:02}01'.format(year, month))
+        bitvector = curr_bitvector + bitvector
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+
+    bitvector = tobitvector(bitvector)
 
     results = []
-    for origin, bitvector in originDict.items():
-        key = (date, prefix_addr, prefix_len, origin)
-        results.append( (key, bitvector) )
-
+    new_key = (target, prefix_addr, prefix_len, origin)
+    results.append(new_key, bitvector)
+    
     return results
 
 def toBitVectorResults(row):
@@ -195,13 +375,14 @@ def toBitVectorResults(row):
     result = [date, prefix_addr, prefix_len, origin, bitvector]
     return '\t'.join(list(map(str, result)))
 
-def getFeatures(row, date):
+def getFeatures(row):
     key, value = row
 
     date, prefix_addr, prefix_len, origin = key
     bitvector = value
 
-    metrics = calcMetrics(bitvector)
+    size = 365
+    metrics = calcMetrics(bitvector, 365)
 
     feature = []
     stats = []
@@ -235,7 +416,6 @@ def toIRRFeatureResult(row):
 
     result = [date, prefix_addr, prefix_len, origin] + [isp, rir, validation, sumRel, source] + list(bgpFeature)
     return '\t'.join(list(map(str, result)))
-
 
 def makedirs(savePath, localPath):
     try: hdfs.mkdir(savePath)
@@ -276,63 +456,44 @@ def saveIRRFeatures(date, results, hdfsRoot, localRoot, source):
 
     writeResult(results, savePath + date, localPath + date, extension='.tsv')
 
+def is_invalid_files(bitvector_files):
 
-def getFiles(path, extension='.tsv'):
-    files = hdfs.ls(path)
+    prev_year, prev_month = None, None
+    for file in bitvector_files:
+        yearmonth = file.split('.')[0]
+        year, month = int(yearmonth[:4]), int(yearmonth[4:])
+            
+        if prev_year is not None:
+            diff_year = year - prev_year
+            diff_month = month - prev_month
+            if month == 1:
+                if diff_year != 1 or diff_month != -11:
+                    return True
+            else:
+                if diff_year != 0 or diff_month != 1:
+                    return True
+        
+        prev_year = year
+        prev_month = month
+
+    return False
+
+
+def extractBGPFeatures(bitvector_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
+    make_dirs(hdfs_dir, local_dir)
+
+    bitvector_files = get_files(bitvector_dir, extension='.tsv')
+
+    if len(bitvector_files) < 12: 
+        print("not enough files: len(bitvector_files) = {}".format(len(bitvector_files)))
+        exit()
     
-    files = list(filter(lambda x: x.endswith(extension), files))
-    return files
-
-def getBGPfiles(path):
-    subdirs = hdfs.ls(path)
+    bitvector_files = sorted(bitvector_files)
+    targets = list(map(lambda x: x.split('.')[0], bitvector_files))[11:]
     
-    files = []
-    for subdir in subdirs:
-        files += hdfs.ls(subdir)
-    
-    return files
-
-def extractBGPFeatures(hdfsRoot, localRoot):
-    vrpPath = '{}/vrps/daily-tsv/'.format(hdfsRoot)
-    relPath = '{}/caida/as-rel/data/'.format(localRoot)
-    bgpReducedPath = '{}/bgp/routeview-reduced/'.format(hdfsRoot)
-
-    radbPath = '{}/radb/daily-tsv-w-changed/'.format(hdfsRoot)
-    irrsPath = '{}/irrs/daily-tsv-w-changed/'.format(hdfsRoot)
-
-    radbFiles = getFiles(radbPath)
-    irrsFiles = getFiles(irrsPath)
-    vrpFiles = getFiles(vrpPath)
-    bgpReducedFiles = getFiles(bgpReducedPath)
-
-    targetdates = []
-    # targetdates += ['20230301']
-    # targetdates += ['20230228', '20230226', '20230224'] # 1,3,5 days
-    # targetdates += ['20230222', '20230215', '20230208'] # 1,2,3 weeks
-    # targetdates += ['20230201', '20230101', '20221201', '20221101'] # 1,2,3,4 months
-    # targetdates += ['20220901', '20220601'] # 6, 9 months
-    # targetdates += ['20220301'] # 1 year
-    # targetdates += ['20220602'] # 6, 9 months
-    targetdates += ['20220301'] # 1 year
-
-    print(targetdates)
-
-    print("extract BGP features: {} ~ {}".format(targetdates[0], targetdates[-1]))
-    
-    asRel = as2rel.AS2Rel(path=relPath)
-    targetdatesDic = {}
-
-    for date in targetdates:
-        dbdate = asRel.getDBDates(date)
-        appendDic(targetdatesDic, dbdate, date)
-
-    asRelDic = asRel.db
-    items = sorted(targetdatesDic.items(), key=lambda x: x[0])
-
-    for dbdate, targetdates in targetdatesDic.items():
-        targetdates = sorted(targetdates)
+    for target in targets:
         conf = SparkConf().setAppName(
-                    "extract BGP features {}-{}".format(targetdates[0], targetdates[-1])
+                    "extract BGP features {}".format(target)
                     ).set(
                         "spark.kryoserializer.buffer.max", "512m"
                     ).set(
@@ -345,100 +506,50 @@ def extractBGPFeatures(hdfsRoot, localRoot):
 
         sc.setLogLevel("WARN")
 
-        sc.addPyFile(root_dir + "/caida.zip")
-        sc.addPyFile(root_dir + "/utils.zip")
-
-        relDict = sc.broadcast(asRelDic[dbdate])
-
-        mindate = targetdates[0]
-        maxdate = targetdates[-1]
-
-        bgpReducedFiles = list(filter(lambda x: 
-                dateDiff(getDate(x), mindate) <= 3650
-                and
-                dateDiff(getDate(x), maxdate) >= 0
-            , bgpReducedFiles)
-        )
-        # bgpReducedFiles = sorted(bgpReducedFiles, reverse=True)[:10]
+        end = bitvector_files.index(target + '.tsv')
+        start = end - 11
         
-        bgpFeatures = sc.textFile(','.join(bgpReducedFiles))\
-                        .flatMap(parseBGPReduced)
+        if start < 0:
+            print("invalid index: {} - {}".format(start, end))
+            print("target: {}".format(target))
+            print(bitvector_files)
+            exit()
 
-        # print("bgpFeatures: {}".format(bgpFeatures.count()))
-        # print("bgpFeatures: {}".format(bgpFeatures.top(1)))
+        curr_bitvector_files = bitvector_files[start:end]
+    
+        if is_invalid_files(curr_bitvector_files):
+            print("invalid bitvector files")
+            print(curr_bitvector_files)
+            exit()
 
-        for date in targetdates:
-            print("date: {}".format(date))
-            start = t.time()
-            currRadbFiles = list(filter(lambda x: getDate(x) == date, radbFiles))
-            currIrrsFiles = list(filter(lambda x: getDate(x) == date, irrsFiles))
-            currVrpFiles = list(filter(lambda x: getDate(x) == date, vrpFiles))\
+        bitvectorRecords = sc.textFile(','.join(curr_bitvector_files))\
+                        .flatMap(parseBitVector)\
+                        .groupByKey()\
+                        .flatMap(lambda row: toBitVector(row, target))
 
-            irrsRecords = sc.textFile(','.join(currIrrsFiles))\
-                            .flatMap(parseIRR)
+        featureRecords = bitvectorRecords.flatMap(lambda row: getFeatures(row))
+        
 
-            radbRecords = sc.textFile(','.join(currRadbFiles))\
-                            .flatMap(parseIRR)
-            
-            vrpDict = sc.textFile(','.join(currVrpFiles))\
-                            .flatMap(parseVRP)\
-                            .groupByKey()\
-                            .map(lambda row: (row[0], makeBinaryPrefixDict(row[1])) )\
-                            .collectAsMap()
+        featureResults = featureRecords.map(toFeatureResult)
 
-            vrpDict = sc.broadcast(vrpDict)
-
-            irrsRecords = irrsRecords.flatMap(lambda row: getRelFunc(row, vrpDict, relDict))
-            radbRecords = radbRecords.flatMap(lambda row: getRelFunc(row, vrpDict, relDict))
-
-            bitvectorRecords = bgpFeatures.groupByKey()\
-                            .flatMap(lambda row: toBitVector(row, date))
-
-            # print("bitvectorRecords: {}".format(bitvectorRecords.count()))
-            # print("bitvectorRecords: {}".format(bitvectorRecords.top(1)))
-            featureRecords = bitvectorRecords.flatMap(lambda row: getFeatures(row, date))
-            # print("featureRecords: {}".format(featureRecords.count()))
-            # print("featureRecords: {}".format(featureRecords.top(1)))
-                            
-            bitvectorResults = bitvectorRecords.map(toBitVectorResults)
-
-            featureResults = featureRecords.map(toFeatureResult)
-
-            irrsResults = irrsRecords.leftOuterJoin(featureRecords)\
-                                .map(toIRRFeatureResult)
-
-            radbResults = radbRecords.leftOuterJoin(featureRecords)\
-                                .map(toIRRFeatureResult)
-
-            saveBitvector(date, bitvectorResults, hdfsRoot, localRoot)
-
-            saveFeatures(date, featureResults, hdfsRoot, localRoot)
-
-            saveIRRFeatures(date, irrsResults, hdfsRoot, localRoot, 'irrs')
-
-            saveIRRFeatures(date, radbResults, hdfsRoot, localRoot, 'radb')
-            end = t.time()
-            elapsed_time = end - start
-            s = elapsed_time % 60
-            
-            elapsed_time = elapsed_time // 60
-
-            m = elapsed_time % 60
-            h = elapsed_time // 60
-            print('elapsed_time: {}:{}:{}'.format(h, m, s))
+        write_result(featureResults, hdfs_dir + target, local_dir + target, extension='.tsv')
 
         sc.stop()
 
 def main():
     parser = argparse.ArgumentParser(description='extract BGP features\n')
-    parser.add_argument('--localRoot', default='/home/mhkang')
-    parser.add_argument('--hdfsRoot', default='/user/mhkang')
+
+    parser.add_argument('--bitvector_dir', default='/user/mhkang/routeviews/bitvector/')
+
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/routeviews/feature/')
+    parser.add_argument('--local_dir', default='/net/data/routeviews/feature/')
+
 
     parser.parse_args()
     args = parser.parse_args()
     print(args)
 
-    extractBGPFeatures(args.hdfsRoot, args.localRoot)
+    extractBGPFeatures(args.bitvector_dir, args.hdfs_dir, args.local_dir)
 
 if __name__ == '__main__':
 
