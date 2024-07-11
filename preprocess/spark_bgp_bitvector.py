@@ -136,6 +136,8 @@ def toBitVector(row, start_date='', num_days=32):
 
 def getBGPBitvectors(bgp_dir, bgp_dir2, hdfs_dir, local_dir):
     
+    hdfs_path = hdfs_path + 'raw/'    
+    
     make_dirs(hdfs_dir, local_dir)
 
     bgp_files = get_files(bgp_dir, extension='.tsv')
