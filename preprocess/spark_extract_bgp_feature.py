@@ -2,6 +2,7 @@ import os
 import sys
 import time as t
 import json
+import calendar
 import random
 import shutil
 import argparse
@@ -14,10 +15,6 @@ from pyspark import SparkContext, SparkConf
 
 sys.path.append('/home/mhkang/rpki-irr/irredicator/')
 from utils.utils import write_result, ip2binary, get_date, get_dates, get_files, make_dirs
-
-from caida import as2rel
-from utils.utils import *
-from utils.prefix import *
 
 def make_bit_vector(bit_size):
     fill = 0
@@ -243,7 +240,7 @@ def getRelFunc(row, vrpDict, relDict):
 def calcMetrics(bitvector, size):
     monWnds = [1,3,5,7,14,21,30,30*3, 30*6, 30*9, 365, 365*2,365*3, 365*4, 365*5, 365*6, 365*7, 365*8, 365*9, 365*10]
 
-    monWnds = list(filter(lambda x: x < size, monWnds))
+    monWnds = list(filter(lambda x: x <= size, monWnds))
 
     prev = (test_bit(bitvector, 0) > 0)
     
@@ -341,7 +338,7 @@ def toBitVector(row, target):
 
     prefix_addr, prefix_len, origin = key
     bitvectors = value
-
+    
     if bitvectors == None: bitvectors = []
     
     bitvectorDict = {}
@@ -352,7 +349,9 @@ def toBitVector(row, target):
     year, month = int(target[:4]), int(target[4:6])
     bitvector = ''
     for i in range(12):
-        curr_bitvector = bitvectorDict.get('{}{:02}01'.format(year, month))
+        _, num_days = calendar.monthrange(year, month)
+
+        curr_bitvector = bitvectorDict.get('{}{:02}01'.format(year, month), '0'*num_days)
         bitvector = curr_bitvector + bitvector
         month -= 1
         if month == 0:
@@ -363,7 +362,7 @@ def toBitVector(row, target):
 
     results = []
     new_key = (target, prefix_addr, prefix_len, origin)
-    results.append(new_key, bitvector)
+    results.append((new_key, bitvector))
     
     return results
 
@@ -381,8 +380,8 @@ def getFeatures(row):
     date, prefix_addr, prefix_len, origin = key
     bitvector = value
 
-    size = 365
-    metrics = calcMetrics(bitvector, 365)
+    size = 3650
+    metrics = calcMetrics(bitvector, 3650)
 
     feature = []
     stats = []
@@ -456,11 +455,11 @@ def saveIRRFeatures(date, results, hdfsRoot, localRoot, source):
 
     writeResult(results, savePath + date, localPath + date, extension='.tsv')
 
-def is_invalid_files(bitvector_files):
+def is_invalid_targets(targets):
 
     prev_year, prev_month = None, None
-    for file in bitvector_files:
-        yearmonth = file.split('.')[0]
+    for target in targets:
+        yearmonth = target
         year, month = int(yearmonth[:4]), int(yearmonth[4:])
             
         if prev_year is not None:
@@ -479,19 +478,46 @@ def is_invalid_files(bitvector_files):
     return False
 
 
-def extractBGPFeatures(bitvector_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
+def extractBGPFeatures(bitvector_dir, hdfs_dir, local_dir):
+
+    hdfs_dir = hdfs_dir + 'raw/'    
+    
     make_dirs(hdfs_dir, local_dir)
 
     bitvector_files = get_files(bitvector_dir, extension='.tsv')
 
-    if len(bitvector_files) < 12: 
+    if len(bitvector_files) < 120: 
         print("not enough files: len(bitvector_files) = {}".format(len(bitvector_files)))
         exit()
     
+    today = str(datetime.today()).split(' ')[0]
+    print(today)
+
+    end_year, end_month, _ = list(map(int, str(today).split('-')))
+    start_year, start_month = 2022, 4
+
+    currfiles = sorted(os.listdir(local_dir))
+    if len(currfiles) > 0:
+        date = currfiles[-1].split('.')[0]
+        start_year, start_month = list(map(int, [date[:4], date[4:]]))
+
+        start_month += 1
+        if start_month > 12:
+            start_month = 1
+            start_year += 1
+    start = str(start_year) + str(start_month)
+    end = str(end_year) + str(end_month)
+    print("start", start_year, start_month)
+    print("end", end_year, end_month)
+    # exit()
+
     bitvector_files = sorted(bitvector_files)
-    targets = list(map(lambda x: x.split('.')[0], bitvector_files))[11:]
-    
-    for target in targets:
+    targets = list(map(lambda x: x.split('/')[-1].split('.')[0], bitvector_files))
+    for i, target in enumerate(targets):
+        if i < 120: continue
+        if target < start: continue
+        if target >= end: continue
+        print("{} {}".format(i, target))
         conf = SparkConf().setAppName(
                     "extract BGP features {}".format(target)
                     ).set(
@@ -506,8 +532,8 @@ def extractBGPFeatures(bitvector_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
 
         sc.setLogLevel("WARN")
 
-        end = bitvector_files.index(target + '.tsv')
-        start = end - 11
+        end = i
+        start = end - 119
         
         if start < 0:
             print("invalid index: {} - {}".format(start, end))
@@ -516,10 +542,10 @@ def extractBGPFeatures(bitvector_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
             exit()
 
         curr_bitvector_files = bitvector_files[start:end]
-    
-        if is_invalid_files(curr_bitvector_files):
-            print("invalid bitvector files")
-            print(curr_bitvector_files)
+        curr_targets = targets[start:end]
+        if is_invalid_targets(curr_targets):
+            print("invalid targets")
+            print(curr_targets)
             exit()
 
         bitvectorRecords = sc.textFile(','.join(curr_bitvector_files))\
@@ -529,12 +555,12 @@ def extractBGPFeatures(bitvector_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
 
         featureRecords = bitvectorRecords.flatMap(lambda row: getFeatures(row))
         
-
         featureResults = featureRecords.map(toFeatureResult)
 
         write_result(featureResults, hdfs_dir + target, local_dir + target, extension='.tsv')
 
         sc.stop()
+
 
 def main():
     parser = argparse.ArgumentParser(description='extract BGP features\n')

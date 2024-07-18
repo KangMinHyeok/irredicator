@@ -124,6 +124,8 @@ def toBitVector(row, start_date='', num_days=32):
 
     for bgp_date in sorted(list(bgps)):
         diff = date_diff(start_date, bgp_date)
+        if diff < 0 or diff >= num_days:
+            continue
         set_bit(bitvector, diff)
 
     results = []
@@ -136,14 +138,12 @@ def toBitVector(row, start_date='', num_days=32):
 
 def getBGPBitvectors(bgp_dir, bgp_dir2, hdfs_dir, local_dir):
     
-    hdfs_path = hdfs_path + 'raw/'    
+    hdfs_dir = hdfs_dir + 'raw/'    
     
     make_dirs(hdfs_dir, local_dir)
 
     bgp_files = get_files(bgp_dir, extension='.tsv')
     bgp_files2 = get_files(bgp_dir2, extension='.tsv')
-
-    bgp_files2 = list(filter(lambda x: '20220401' <= get_date(x) < '20230301', bgp_files2))
 
     bgp_files += bgp_files2
     
@@ -162,8 +162,13 @@ def getBGPBitvectors(bgp_dir, bgp_dir2, hdfs_dir, local_dir):
         if start_month > 12:
             start_month = 1
             start_year += 1
-    print('start: {} {}'.format(start_year, start_month))
-    print('end: {} {}'.format(end_year, end_month))
+    print("start", start_year, start_month)
+    print("end", end_year, end_month)
+    # exit()
+    # start_year, start_month = 2011, 1
+    # end_year, end_month = 2022, 4
+    # print('start: {} {}'.format(start_year, start_month))
+    # print('end: {} {}'.format(end_year, end_month))
 
     for year in range(start_year, end_year + 1):
         for month in range(1, 13):
@@ -171,7 +176,7 @@ def getBGPBitvectors(bgp_dir, bgp_dir2, hdfs_dir, local_dir):
                 continue
             if year == end_year and month >= end_month:
                 continue
-
+            print("start {} {}".format(year, month))
             target = '{}{:02}'.format(year, month)
             curr_bgp_files = list(filter(lambda x: get_date(x).startswith(target), bgp_files))
 
@@ -207,8 +212,6 @@ def getBGPBitvectors(bgp_dir, bgp_dir2, hdfs_dir, local_dir):
             write_result(bitvectorRecords, hdfs_dir + target, local_dir + target, extension='.tsv')
 
             sc.stop()
-        #     break
-        # break
 
 
 def main():
