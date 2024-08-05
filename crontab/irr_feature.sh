@@ -8,4 +8,4 @@ export LD_LIBRARY_PATH=/usr/local/hadoop/lib/native:$LD_LIBRARY_PATH
 export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.4-src.zip:$PYTHONPATH
 
 
-/home/mhkang/.local/bin/spark-submit /home/mhkang/rpki-irr/irredicator/preprocess/spark_bgp_bitvector.py >> /home/mhkang/rpki-irr/logs/spark_bgp_bitvector.log 2>&1
+/home/mhkang/.local/bin/spark-submit /home/mhkang/rpki-irr/irredicator/preprocess/spark_irr_feature.py >> /home/mhkang/rpki-irr/logs/spark_irr_feature.log 2>&1
