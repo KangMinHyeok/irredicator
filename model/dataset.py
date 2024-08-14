@@ -43,12 +43,12 @@ class Dataset:
         else:
             print('Invalid indir type: must be str of list of str but the type is {}'.format(type(indir)))
 
-        infiles = list(filter(lambda x: x.endswith('.tsv') and dateDiff(getDate(x), target_date) == 0, infiles ))
+        infiles = list(filter(lambda x: x.endswith('.tsv') and date_diff(get_date(x), target_date) == 0, infiles ))
 
         return infiles
     
 
-    def feature_names(self):
+    def get_feature_names(self):
         if self.feature_names is not None:
             return self.feature_names
 
@@ -195,27 +195,43 @@ class Dataset:
         records = []
         
         idx = 0
-
+        print(self.infiles)
         for infile in self.infiles:
-            if len(data) == 5000: break
+            # if len(data) == 1000: break
             with open(infile, 'r') as fin:
                 for line in fin:
                     idx += 1
-                    if len(data) == 5000: break
-                    tokens = line.replace('\n', '').split('\t')
+                    # if len(data) == 1000: break
+                    tokens = line.replace('\n', '').split(',')
+                    token_len = len(tokens)
+                    if token_len != 9 and token_len != 321:
+                        if token_len > 321:
+                            offset = token_len - 321 + 1
+                        elif token_len > 9:
+                            offset = token_len - 9 + 1
+                        else:
+                            continue
+                        
+                        isp = ','.join(tokens[4:4+offset])
+                        new_tokens = tokens[:4] + [isp] + tokens[4+offset:]
+                        tokens = new_tokens
                     date, prefix_addr, prefix_len, origin, isp, rir, validation, sumRel, source = tokens[:9]
-                    # prefix = "{}/{}".format(prefix_addr, prefix_len)
+                    
                     prefix_len = int(prefix_len)
+                    if '#' in origin:
+                        origin = origin.split('#')[0]
                     orgin = int(origin)
                     inactive = len(tokens) == 9
                     excluded = validation == 'invalid' and sumRel != 'none'
-                    covered = sumRel != 'not-covered'
+                    covered = validation == 'invalid' or validation == 'valid'
 
                     record_type = 'not-coverd'
                     if inactive: record_type = 'inactive'
                     elif excluded: record_type = 'excluded'
-                    elif covered: record_type = 'covered'
-                    
+                    elif covered: 
+                        record_type = 'covered'
+                        # print(tokens[:9])
+                        # a = input()
                     key = (prefix_addr, prefix_len, origin)
                     record = [idx, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source]
 
@@ -229,35 +245,30 @@ class Dataset:
                     label = 1 if validation == 'valid' else 0
                     features = list(map(float, tokens[9:]))
                     features = self.trim_features(features)
-                    row = feature + [label, record_type, idx]
+                    row = features + [label, record_type, idx]
                     if label_flipping:
                         row += [key, validation]
 
                     data.append(row)
-        
+                    
+            
 
-        columns = self.feature_names() + ['label', 'record_type', 'idx']
+        columns = self.get_feature_names() + ['label', 'record_type', 'idx']
         record_columns = [
             'idx', 'date', 'rir', 
             'prefix_addr', 'prefix_len', 'origin', 'isp', 
             'sumRel', 'validation', 'source', 'record_type'
         ]
 
-        if label_flipping:
-            columns += ['key', 'validation']
-            record_columns += ['key']
         data = pd.DataFrame(data, columns=columns)
         data = data.set_index(['idx'])
         data = data.sample(frac=1)
-        
-        
-
+        # print(data)
+        # a = input()
         records = pd.DataFrame(records, columns=record_columns)
         records = records.set_index(['idx'])
         self.data = data
         self.records = records
-
-        if label_flipping:
-            self.augment_dataset(bitvector_file, columns)
-
+        # print(date)
+        
         return data, records

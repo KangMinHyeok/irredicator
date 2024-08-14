@@ -1,4 +1,4 @@
-o#!/usr/bin/env python3
+#!/usr/bin/env python3
 #
 # Copyright (c) 2018 NLnet Labs
 # Licensed under a 3-clause BSD license, see LICENSE in the

@@ -1,15 +1,14 @@
 import os
 import sys
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
+
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
 from utils.utils import ip2binary
 
 def make_binary_prefix_tree(records):
     tree = {}
     record_set = {}
-
     for record in records:
-        prefix_addr, prefix_len = record[:1]
+        prefix_addr, prefix_len = record[:2]
         binary_prefix = ip2binary(prefix_addr, prefix_len)
 
         insert(tree, record_set, binary_prefix, record)

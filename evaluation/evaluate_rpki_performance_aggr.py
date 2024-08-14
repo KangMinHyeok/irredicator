@@ -22,6 +22,7 @@ from utils.utils import *
 from utils.score import *
 from model.dataset import Dataset
 from model.model import Model
+from model.loss import softmax
 
 seed_value = 940124
     
@@ -65,13 +66,58 @@ def evaluate(train_dirs, outdir, params=None
     X_train, Y_train = train
     X_test, Y_test = test
     Y_pred = model.predict(X_test)
-    
+
     save_score(score_file, Y_test, Y_pred)
 
     X_all, Y_all = dataset.get_data()
     index = X_all.index.values.tolist()
     Y_pred_all = model.predict(X_all)
     dpreds = pd.DataFrame(Y_pred_all, columns=['score0', 'score1'], index=index)
+
+    data, record = dataset.load_dataset(label_flipping=False)
+    aggr_pred = dpreds.join(record, how='left')
+    print(aggr_pred)
+    aggregated_scores = {}
+    for record in aggr_pred.values.tolist():
+        score0, score1, date, rir, prefix_addr, prefix_len, origin, isp, sumRel, validation, source, record_type = record
+        key = (prefix_addr, prefix_len)
+        if key not in aggregated_scores:
+            aggregated_scores[key] = {}
+            aggregated_scores[key]['origin'] = []
+            aggregated_scores[key]['score0'] = []
+            aggregated_scores[key]['score1'] = []
+            aggregated_scores[key]['record'] = {}
+
+        if origin not in aggregated_scores[key]['origin']:
+            aggregated_scores[key]['origin'].append(origin)
+            aggregated_scores[key]['score0'].append(score0)
+            aggregated_scores[key]['score1'].append(score1)
+            aggregated_scores[key]['record'][origin] = []
+            aggregated_scores[key]['record'][origin].append(record)
+
+        if origin in aggregated_scores[key]['origin']:
+            aggregated_scores[key]['record'][origin].append(record)
+
+    single = 0
+    multiple = 0
+    with open('score.txt', 'w') as fout:
+        for key, per_prefix_dict in aggregated_scores.items():
+            if len(per_prefix_dict['score0']) == 1:
+                single += 1
+                continue
+            multiple += 1
+            validations = list(map(lambda x: x[0][-3], per_prefix_dict['record'].values()))
+            original = list(map(lambda x: x[1], softmax(list(zip(per_prefix_dict['score0'],per_prefix_dict['score1'])))))
+            fout.write('{}\n{}\n{}\n{}\n\n'.format(
+                ','.join(list(map(str, per_prefix_dict['score1']))),
+                ','.join(list(map(str, original))), 
+                ','.join(list(map(str, softmax(per_prefix_dict['score1'])))),
+                ','.join(validations)
+            ))
+    
+    print('total: {}'.format(single + multiple))
+    print('single: {}'.format(single))
+    print('multiple: {}'.format(multiple))
 
     records = dataset.get_records()
     records = records.join(dpreds, how='left')
@@ -80,27 +126,30 @@ def evaluate(train_dirs, outdir, params=None
 
     return params
 
-def evaluate_rpki_performance(outdir, train_dirs, save_model):
+def evaluate_rpki_performance_aggr(outdir, train_dirs, save_model):
     os.makedirs(outdir, exist_ok=True)
 
     params = None
-    for i in range(10):
-        params = evaluate(train_dirs, outdir
-            , params=params, suffix='_{}'.format(i)
-            , save_model=save_model, model_file=outdir + 'model_{}.pkl'.format(i))
+    params = evaluate(train_dirs, outdir
+        , params=params, save_model=save_model, model_file=outdir + 'model.pkl')
 
 def main():
     parser = argparse.ArgumentParser(description='get vrp\n')
-    parser.add_argument('--outdir', type=str, default='/home/mhkang/rpki-irr/outputs/evaluation/rpki_performance/')
+    parser.add_argument('--outdir', type=str, default='/home/mhkang/rpki-irr/outputs/evaluation/rpki_performance_aggr/')
     parser.add_argument('--train_dirs', nargs='+', type=str, default=['/home/mhkang/irrs/bgp-features-final/', '/home/mhkang/radb/bgp-features-final/'])
     parser.add_argument('--save_model', default=True)
 
     args = parser.parse_args()
 
-    evaluate_rpki_performance(args.outdir, args.train_dirs, args.save_model)
+    evaluate_rpki_performance_aggr(args.outdir, args.train_dirs, args.save_model)
 
 if __name__ == '__main__':
     random.seed(seed_value)
     np.random.seed(seed_value)
     main()
 
+# prefixes
+# [1102770 rows x 12 columns]
+# total: 929047
+# single: 879640
+# multiple: 49407

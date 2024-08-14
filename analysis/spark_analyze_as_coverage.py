@@ -19,9 +19,10 @@ from dateutil.relativedelta import relativedelta
 from pyspark import SparkContext, StorageLevel, SparkConf, broadcast
 import pydoop.hdfs as hdfs
 
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
-from utils.utils import write_result, ip2binary, get_date, get_files
+# cwd = os.getcwd().split('/')
+# sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
+from utils.utils import write_result, ip2binary, get_date, get_files, make_dirs
 
 def parseIRR(line, ip_version='ipv4'):
     date, rir, prefix, origin, isp, country, source, changed = line.replace('\n', '').split("\t")
@@ -112,12 +113,37 @@ def get_result(row):
 
     return ','.join(list(map(lambda x: str(x), results)))
 
-def AS_coverage(asn_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
+def AS_coverage(ip_version, asn_dir, roa_dir, irr_dir, hdfs_dir, local_dir):
     make_dirs(hdfs_dir, local_dir)
     
-    savePath = savePath + 'raw/'
+    hdfs_dir = hdfs_dir + 'raw/'
 
     make_dirs(hdfs_dir, local_dir)
+
+    asn_files = get_files(asn_dir, extension='.csv')
+    irr_files = get_files(irr_dir, extension='.tsv')
+    roa_files = get_files(roa_dir, extension='.tsv')
+
+    files = list(filter(lambda x: x.startswith('as-coverage'), os.listdir(local_dir)))
+    start = max(list(map(lambda x: x.split('.')[0].split('-')[-1], files)))
+
+    nro_dates = list(map(get_date, asn_files))
+    irr_dates = list(map(get_date, irr_files))
+    roa_dates = list(map(get_date, roa_files))
+    end = min([max(nro_dates), max(irr_dates), max(roa_dates)])
+    
+    if end <= start:
+        print("no new data available")
+        print("end date of previpus analysis: {}".format(start))
+        print("latest dates of nro, irr, and roa: {}, {}, and {}".format(max(nro_dates), max(irr_dates), max(roa_dates)))
+        exit()
+
+    print("target dates: {} ~ {}".format(start, end))
+
+
+    asn_files = list(filter(lambda x: start < get_date(x) <= end, asn_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
 
     conf = SparkConf().setAppName(
                 "AS Coverage"
@@ -131,30 +157,21 @@ def AS_coverage(asn_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
 
     sc.setLogLevel("WARN")
 
-    asnFiles = get_files(asn_dir, extension='.csv')
-    irrFiles = get_files(irr_dir, extension='.tsv')
-    roaFiles = get_files(roa_dir, extension='.tsv')
-    
-    asnFiles = list(filter(lambda x: start <= get_date(x) <= end, asnFiles))
-    irrFiles = list(filter(lambda x: start <= get_date(x) <= end, irrFiles))
-    roaFiles = list(filter(lambda x: start <= get_date(x) <= end, roaFiles))
-    
-    print("target dates: {} ~ {}".format(start, end))
 
-    total_ASes = sc.textFile(','.join(asnFiles))\
+    total_ASes = sc.textFile(','.join(asn_files))\
                         .flatMap(parseASN)\
                         .distinct()\
                         .map(lambda row: ((row[0], row[1]), 1) )\
                         .reduceByKey(add)
                         
-    roa_ASes = sc.textFile(','.join(roaFiles))\
+    roa_ASes = sc.textFile(','.join(roa_files))\
                         .flatMap(lambda line: parseVRP(line, ip_version=ip_version))\
                         .distinct()\
                         .map(lambda row: ((row[0], row[1], row[2]), 1) )\
                         .reduceByKey(add)\
                         .map(lambda row: ((row[0][0], row[0][1]), (row[0][2], row[1])))
     
-    irr_ASes = sc.textFile(','.join(irrFiles))\
+    irr_ASes = sc.textFile(','.join(irr_files))\
                         .flatMap(lambda line: parseIRR(line, ip_version=ip_version))\
                         .distinct()\
                         .map(lambda row: ((row[0], row[1], row[2]), 1) )\
@@ -168,25 +185,25 @@ def AS_coverage(asn_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
                     .groupByKey()\
                     .map(get_result)
 
-    filename = 'as-coverage-{}-{}'.format(start, end)
+    filename = 'as-coverage-ipv4-{}'.format(end)
     write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
 
     sc.stop()
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='as coverage\n')
-    parser.add_argument('--start', default='20110101')
-    parser.add_argument('--end', default='20230301')
+    parser.add_argument('--ip_version', default='ipv4')
     parser.add_argument('--ans_dir', default='/user/mhkang/nrostats/asn/')
 
-    parser.add_argument('--roa_dir' default='/user/mhkang/vrps/daily-tsv/')
-    parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/radb/daily-tsv-w-changed/', '/user/mhkang/irrs/daily-tsv-w-changed/'])
-
-    parser.add_argument('--hdfs_dir', default='/user/mhkang/deployment/as-coverage/')
-    parser.add_argument('--local_dir', default='/home/mhkang/deployment/as-coverage/')
+    parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
+    parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/irrs/daily-tsv/'])
     
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/as-coverage/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/as-coverage/')
+
+
     args = parser.parse_args()
     print(args)
     
     
-    AS_coverage(args.ans_dir, args.roa_dir, args.irr_dir, args.hdfs_dir, args.local_dir, args.start, args.end)
+    AS_coverage(args.ip_version, args.ans_dir, args.roa_dir, args.irr_dir, args.hdfs_dir, args.local_dir)

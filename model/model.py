@@ -83,14 +83,14 @@ class Model:
         return auc
 
 
-    def tune_params(self, tune_data, tune_args):
+    def tune_params(self, tune_data, tune_args, date=''):
         self.tune_data = tune_data
 
         pbounds = tune_args.get('pbounds')
         random_state = tune_args.get('random_state')
         init_points = tune_args.get('init_points')
         n_iter = tune_args.get('n_iter')
-        self.tune_file = self.outdir + 'candidate_parameters.csv'
+        self.tune_file = self.outdir + '/params/{}_candidate_parameters.csv'.format(date)
         self.ftune = None
         bayes_optimizer = BayesianOptimization(f=self.tune_target, pbounds=pbounds, random_state=random_state)
         bayes_optimizer.maximize(init_points=init_points, n_iter=init_points)

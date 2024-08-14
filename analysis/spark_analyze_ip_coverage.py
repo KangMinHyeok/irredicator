@@ -19,9 +19,30 @@ from pyspark.sql import SQLContext, Row
 from dateutil.relativedelta import relativedelta
 from pyspark import SparkContext, StorageLevel, SparkConf, broadcast
 
-cwd = os.getcwd().split('/')
-sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
-from utils.utils import write_result, ip2binary, get_date, get_files
+# cwd = os.getcwd().split('/')
+# sys.path.append('/'.join(cwd[:cwd.index('irredicator')+1]))
+sys.path.append('/home/mhkang/rpki-irr/irredicator/')
+from utils.utils import write_result, get_date, get_files, make_dirs
+
+def ip2binary(prefix_addr, prefix_len):
+    if("." in prefix_addr): # IPv4
+        octets = map(lambda v: int(v), prefix_addr.split("."))
+        octets = map(lambda v: format(v, "#010b")[2:], octets)
+    else: # IPv6
+        octets = map(lambda v: str(v), prefix_addr.split(":"))
+        prefix_addrs = prefix_addr.split(":")
+        for i in range( 8 - len(prefix_addrs)):
+            idx = prefix_addrs.index("")
+            prefix_addrs.insert(idx, "")
+        prefix_addrs += [""] * (8 - len(prefix_addrs)) # 8 groups, each of them has 16 bytes (= four hexadecimal digits)
+        octets = []
+        for p in prefix_addrs:
+            if( len(p) != 4): # 4 bytes
+                p = (4 - len(p)) * '0' + p
+            for bit in p:
+                b = format(int(bit, 16), "04b")
+                octets.append( b)
+    return "".join(octets)[:int(prefix_len)]
 
 def parseIRR(line, ip_version='ipv4'):
     date, rir, prefix, origin, isp, country, source, changed = line.replace('\n', '').split("\t")
@@ -137,11 +158,11 @@ def get_result(row):
     return results
 
 
-def IP_coverage(nro_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
+def IP_coverage(ip_version, nro_dir, roa_dir, irr_dir, hdfs_dir, local_dir):
 
     make_dirs(hdfs_dir, local_dir)
 
-    args.savePath = args.savePath + 'raw/'
+    hdfs_dir = hdfs_dir + 'raw/'
     
     make_dirs(hdfs_dir, local_dir)
 
@@ -154,14 +175,27 @@ def IP_coverage(nro_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
     sc = SparkContext(conf=conf)
     sc.setLogLevel("WARN")
 
+    files = list(filter(lambda x: x.startswith('ip-coverage'), os.listdir(local_dir)))
+    start = max(list(map(lambda x: x.split('.')[0].split('-')[-1], files)))
+
     nro_files = get_files(nro_dir, extension='.csv')
     irr_files = get_files(irr_dir, extension='.tsv')
     roa_files = get_files(roa_dir, extension='.tsv')
     
+    nro_dates = list(map(get_date, nro_files))
+    irr_dates = list(map(get_date, irr_files))
+    roa_dates = list(map(get_date, roa_files))
+    end = min([max(nro_dates), max(irr_dates), max(roa_dates)])
     
-    nro_files = list(filter(lambda x: start <= get_date(x) <= end, nro_files))
-    irr_files = list(filter(lambda x: start <= get_date(x) <= end, irr_files))
-    roa_files = list(filter(lambda x: start <= get_date(x) <= end, roa_files))
+    if end <= start:
+        print("no new data available")
+        print("end date of previpus analysis: {}".format(start))
+        print("latest dates of nro, irr, and roa: {}, {}, and {}".format(max(nro_dates), max(irr_dates), max(roa_dates)))
+        exit()
+
+    nro_files = list(filter(lambda x: start < get_date(x) <= end, nro_files))
+    irr_files = list(filter(lambda x: start < get_date(x) <= end, irr_files))
+    roa_files = list(filter(lambda x: start < get_date(x) <= end, roa_files))
 
     print("target dates: {} ~ {}".format(start, end))
     
@@ -191,25 +225,28 @@ def IP_coverage(nro_dir, roa_dir, irr_dir, hdfs_dir, local_dir, start, end):
     results =   IPs.leftOuterJoin(total_IPs)\
                     .flatMap(get_result)
 
-    filename = "ip-coverage-{}-{}".format(start, end)
+    filename = "ip-coverage-ipv4-{}".format(end)
 
     write_result(results, hdfs_dir + filename, local_dir + filename, extension='.csv')
     sc.stop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ip percent\n')
-    parser.add_argument('--start', default='20110101')
-    parser.add_argument('--end', default='20230301')
+    parser.add_argument('--ip_version', default='ipv4')
     parser.add_argument('--nro_dir', default='/user/mhkang/nrostats/ipv4-w-date/')
 
     parser.add_argument('--roa_dir', default='/user/mhkang/vrps/daily-tsv/')
     
-    parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/radb/daily-tsv-w-changed/', '/user/mhkang/irrs/daily-tsv-w-changed/'])
+    parser.add_argument('--irr_dir', nargs='+', default=['/user/mhkang/irrs/daily-tsv/'])
     
-    parser.add_argument('--hdfs_dir', default='/user/mhkang/deployment/ip-coverage/')
-    parser.add_argument('--local_dir', default='/home/mhkang/deployment/ip-coverage/')
+    parser.add_argument('--hdfs_dir', default='/user/mhkang/rpki-irr/outputs/analysis/ip-coverage/')
+    parser.add_argument('--local_dir', default='/home/mhkang/rpki-irr/outputs/analysis/ip-coverage/')
 
     args = parser.parse_args()
     print(args)
     
-    IP_coverage(args.nro_dir, args.roa_dir, args.irr_dir, args.hdfs_dir, args.local_dir, args.start, args.end)
+    IP_coverage(args.ip_version, args.nro_dir, args.roa_dir, args.irr_dir, args.hdfs_dir, args.local_dir)
+
+
+
+

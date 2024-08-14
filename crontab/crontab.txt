@@ -1,0 +1,59 @@
+# m h  dom mon dow   command
+#################### BEGIN daily ####################
+
+####### Datasets ######
+##### NRO stats
+# download and put nrostat files
+0 2 * * * /home/mhkang/rpki-irr/irredicator/crontab/nrostats.sh
+
+##### IRR
+# download IRR rawdatasets and put them on hdfs
+# produce tsv files and put tsv files on hdfs
+0 4 * * * /home/mhkang/rpki-irr/irredicator/crontab/irr.sh
+
+##### VRP
+# download VRP rawdatasets and put them on hdfs
+# produce tsv files and put tsv files on hdfs
+0 8 * * * /home/mhkang/rpki-irr/irredicator/crontab/roa.sh
+
+
+##### CAIDA dataset
+# download as2rel dataset
+0 3 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --rel >> /home/mhkang/rpki-irr/logs/get_as_info_rel.log 2>&1
+# download as2isp dataset
+0 5 * * * python3 /home/mhkang/rpki-irr/src/dataset/get_as_info.py --isp >> /home/mhkang/rpki-irr/logs/get_as_info_isp.log 2>&1
+
+##### BGP
+# downloda raw datasets
+0 1 * * * python3.8 /home/mhkang/rpki-irr/irredicator/dataset/get_routeviews.py >> /home/mhkang/rpki-irr/logs/get_routeviews.log 2>&1
+# reduce routeviews dataset for each vantage point
+0 6 * * * python3.8 /home/mhkang/rpki-irr/irredicator/preprocess/reduce_routeviews.py >> /home/mhkang/rpki-irr/logs/reduce_routeviews.log 2>&1
+# put reduced files on hdfs and reduce bgp update files for each day
+# put reduced files on hdfs
+0 10 * * * /home/mhkang/rpki-irr/irredicator/crontab/routeviews.sh
+# put datasets to hdfs
+#################### END daily ####################
+
+#################### BEGIN weekly ####################
+####### Analysis ######
+# analyze IP coverage and AS coverage
+0 12 * * 0 /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
+0 16 * * 0 /home/mhkang/rpki-irr/irredicator/crontab/inconsistency.sh
+0 12 * * 3 /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
+0 16 * * 3 /home/mhkang/rpki-irr/irredicator/crontab/inconsistency.sh
+0 12 * * 6 /home/mhkang/rpki-irr/irredicator/crontab/irr_feature.sh
+
+##### webdata
+# merge analysis output files
+0 22 * * 3 python3.8 /home/mhkang/rpki-irr/irredicator/analysis/merge_output.py >> /home/mhkang/rpki-irr/logs/merge_output.log 2>&1
+
+#################### END weekly ########################################
+
+
+#################### BEGIN monthly ####################
+
+####### Feature ######
+# BGP -> bitvector -> feature
+0 0 1 * * /home/mhkang/rpki-irr/irredicator/crontab/bgp_feature.sh
+
+#################### END monthly ####################

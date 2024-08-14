@@ -8,12 +8,16 @@ class AS2ISP:
 		self.raw_path = path
 		self.export_path = path + "as2isp.json"
 
-		self.date = []
+		self.dates = []
 		self.as2isp = None
 
-		if not self.hasDB(): self.saveDB()
-		self.loadDate()
-		self.loadDB()
+		if not self.hasDB(): 
+			self.saveDB()
+		else:
+			self.loadDate()
+			self.loadDB()
+			if max(self.dates) not in self.as2isp:
+				self.saveDB()
 
 	def hasDB(self):
 		files = os.listdir(self.raw_path)
@@ -23,7 +27,7 @@ class AS2ISP:
 		for fname in os.listdir(self.raw_path):
 			if("as-org" not in fname): continue
 			date = fname.split(".")[0]
-			self.date.append(date)
+			self.dates.append(date)
 
 	def loadDB(self):
 		self.as2isp = json.load(open(self.export_path))
@@ -39,9 +43,9 @@ class AS2ISP:
 
 	def getISP(self, date, asnum ):
 		
-		diff = map(lambda v: abs( (self.toDate(v) - self.toDate(date)).days), self.date)
+		diff = map(lambda v: abs( (self.toDate(v) - self.toDate(date)).days), self.dates)
 
-		dbdate = self.date[diff.index(min(diff))]
+		dbdate = self.dates[diff.index(min(diff))]
 
 		asnum = str(asnum)
 		if asnum not in self.as2isp[dbdate]:
@@ -54,8 +58,8 @@ class AS2ISP:
 		return org, country
 	
 	def getASISPDict(self, date):
-		diff = list(map(lambda v: abs( (self.toDate(v) - self.toDate(date)).days), self.date))
-		dbdate = self.date[diff.index(min(diff))]
+		diff = list(map(lambda v: abs( (self.toDate(v) - self.toDate(date)).days), self.dates))
+		dbdate = self.dates[diff.index(min(diff))]
 
 		return self.as2isp[dbdate]
 
@@ -63,12 +67,17 @@ class AS2ISP:
 		ORG_NAME    = "format:org_id|changed|org_name|country|source"
 		AS_ORG      = "format:aut|changed|aut_name|org_id|source"
 		AS_ORG_NEW  = "format:aut|changed|aut_name|org_id|opaque_id|source"
-		asnumDB = {}
+		self.as2isp = {}
 
 		for fname in os.listdir(self.raw_path):
 			if("as-org2info.txt" not in fname): continue
 			date = fname.split(".")[0]
-			asnumDB[date] = {}
+			if date not in self.dates:
+				self.dates.append(date)
+
+			if date not in self.as2isp:
+				self.as2isp[date] = {}
+				
 			org_id2name = {}
 			as_asnum2name = {}
 
@@ -98,11 +107,11 @@ class AS2ISP:
 
 					elif(line_type == 2): ## AS_ORG
 						asnum, changed, aut_name, org_id, source = line.split("|")
-						asnumDB[date][asnum] = org_id2name[org_id]
+						self.as2isp[date][asnum] = org_id2name[org_id]
 
 					elif(line_type == 3): ## AS_ORG_NEW
 						asnum, changed, aut_name, org_id, opaque_id, source = line.split("|")
-						asnumDB[date][asnum] = org_id2name[org_id]
+						self.as2isp[date][asnum] = org_id2name[org_id]
 				except Exception as e:
 					if str(e).startswith('need more than'):
 						pass
@@ -110,4 +119,5 @@ class AS2ISP:
 						print("file: {}\nline {}: {}".format(fname, i+1, str(e)))
 						raise Exception
 
-		json.dump(asnumDB, open(self.export_path, "w"))
+		json.dump(self.as2isp, open(self.export_path, "w"))
+
