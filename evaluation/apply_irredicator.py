@@ -26,7 +26,7 @@ from model.model import Model
 seed_value = 940124
     
 def apply(train_dir, outdir, params=None
-    , init_points=2, n_iter=3
+    , init_points=1, n_iter=1
     , save_model=False, target_date='20230301'
     , load_model=False, model_file=''):
     
