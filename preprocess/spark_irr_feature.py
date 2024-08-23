@@ -236,7 +236,7 @@ def toIrrFeature(row):
     return [result]
 
 
-def getIRRFeature(feature_dir, rel_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
+def getIRRFeature(feature_dir, rel_dir, irr_dir, vrp_dir, hdfs_dir, local_dir, start=None):
 
     hdfs_dir = hdfs_dir + 'raw/'
     make_dirs(hdfs_dir, local_dir)
@@ -244,6 +244,8 @@ def getIRRFeature(feature_dir, rel_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
     feature_files = sorted(get_files(feature_dir, extension='.tsv'))
     irr_files = get_files(irr_dir, extension='.tsv')
     vrp_files = get_files(vrp_dir, extension='.tsv')
+    curr_files = get_files(hdfs_dir, extension='tsv')
+    curr_dates = list(map(lambda x: x.split('/')[-1].split('.')[0], curr_files))
     
     targets = list(map(lambda x: get_date(x), feature_files))
 
@@ -251,10 +253,11 @@ def getIRRFeature(feature_dir, rel_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
     print(today)
     end = str(today).replace('-', '')
 
-    start = '20230201'
-    currfiles = sorted(os.listdir(local_dir))
-    if len(currfiles) > 0:
-        start = currfiles[-1].split('.')[0]
+    if start is None:
+        start = '20230201'
+        currfiles = sorted(os.listdir(local_dir))
+        if len(currfiles) > 0:
+            start = currfiles[-1].split('.')[0]
         
     print('start: {}'.format(start))
     print('end: {}'.format(end))
@@ -271,6 +274,7 @@ def getIRRFeature(feature_dir, rel_dir, irr_dir, vrp_dir, hdfs_dir, local_dir):
     for feature_file in feature_files:
         date = get_date(feature_file)
         if date < feature_start or date >= end[:6]: continue
+        if date in curr_dates: continue
         print(date)
         conf = SparkConf().setAppName(
                     "IRR features {}".format(date)
@@ -349,12 +353,13 @@ def main():
 
     parser.add_argument('--hdfs_dir', default='/user/mhkang/irrs/bgp-feature/')
     parser.add_argument('--local_dir', default='/net/data/irrs/bgp-feature/')
+    parser.add_argument('--start', default=None)
 
     parser.parse_args()
     args = parser.parse_args()
     print(args)
 
-    getIRRFeature(args.feature_dir, args.rel_dir, args.irr_dir, args.vrp_dir, args.hdfs_dir, args.local_dir)
+    getIRRFeature(args.feature_dir, args.rel_dir, args.irr_dir, args.vrp_dir, args.hdfs_dir, args.local_dir, start=args.start)
 
 if __name__ == '__main__':
 
