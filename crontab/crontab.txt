@@ -32,6 +32,9 @@
 # put reduced files on hdfs
 0 10 * * * /home/mhkang/rpki-irr/irredicator/crontab/routeviews.sh
 # put datasets to hdfs
+
+##### Feature
+0 18 * * * /home/mhkang/rpki-irr/irredicator/crontab/irr_feature.sh
 #################### END daily ####################
 
 #################### BEGIN weekly ####################
@@ -41,7 +44,7 @@
 0 16 * * 0 /home/mhkang/rpki-irr/irredicator/crontab/inconsistency.sh
 0 12 * * 3 /home/mhkang/rpki-irr/irredicator/crontab/coverage.sh
 0 16 * * 3 /home/mhkang/rpki-irr/irredicator/crontab/inconsistency.sh
-0 12 * * 6 /home/mhkang/rpki-irr/irredicator/crontab/irr_feature.sh
+0 12 * * 6 /home/mhkang/rpki-irr/irredicator/crontab/irredicator.sh
 
 ##### webdata
 # merge analysis output files

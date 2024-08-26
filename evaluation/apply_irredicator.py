@@ -123,6 +123,7 @@ def apply_irredicator(outdir, train_dir, save_model, start=None, end=None):
     if end is not None:
         target_dates = list(filter(lambda x: int(x) < int(end), target_dates))
     target_dates = sorted(target_dates, key=lambda x: int(x))
+    print(target_dates)
     # print(target_dates)
     # print(target_dates[0], target_dates[-1])
     # exit()
